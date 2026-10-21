@@ -31,7 +31,10 @@ def main():
     ap.add_argument("--intervals", default="merged_candidate_intervals.tsv")
     ap.add_argument("--top-n", type=int, default=6)
     ap.add_argument("--pad", type=int, default=250000, help="bp added to each side of an interval")
-    ap.add_argument("--min-called-per-sex", type=int, default=3)
+    pl = ap.add_mutually_exclusive_group(required=True)
+    pl.add_argument("--ploidy", type=int)
+    pl.add_argument("--sample-ploidy")
+    ap.add_argument("--min-called-per-sex", default="0.5", help="count or fraction of each sex")
     ap.add_argument("--outdir", default="candidate_inspection")
     args = ap.parse_args()
 
@@ -56,7 +59,8 @@ def main():
         run([sys.executable, os.path.join(HERE, "inspect_candidate_region.py"),
              "--vcf-samples", args.vcf_samples, "--males", args.males, "--females", args.females,
              "--genotypes", f"{tag}.genotypes.tsv", "--prefix", tag,
-             "--min-called-per-sex", str(args.min_called_per_sex)])
+             "--min-called-per-sex", str(args.min_called_per_sex),
+             *(["--ploidy", str(args.ploidy)] if args.ploidy else ["--sample-ploidy", args.sample_ploidy])])
 
         with open(f"{tag}.summary.txt") as f:
             lines = dict(l.split(":", 1) for l in f.read().splitlines() if ":" in l)

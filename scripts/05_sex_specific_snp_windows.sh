@@ -8,16 +8,22 @@
 # Usage:
 #   scripts/05_sex_specific_snp_windows.sh RUN_NAME [classifier options]
 #
-# Classifier options are passed to bin/classify_sex_specific_snps.py, e.g.
+# Classifier options are passed to bin/classify_sex_specific_snps.py.
+# Thresholds are counts or fractions of each sex (0.8 = 80%, rounded up):
 #   scripts/05_sex_specific_snp_windows.sh strict \
-#     --min-called-males 7 --min-called-females 5 \
-#     --min-alt-males 7 --min-alt-females 5 --max-alt-opposite 1
-#   scripts/05_sex_specific_snp_windows.sh dosage1 ... --alt-dosage 1   # 0/0/0/1 only
-#   scripts/05_sex_specific_snp_windows.sh dosage2 ... --alt-dosage 2   # 0/0/1/1 only
+#     --min-called-males 0.8 --min-called-females 0.8 \
+#     --min-alt-males 0.8 --min-alt-females 0.8 --max-alt-opposite 0
+#   scripts/05_sex_specific_snp_windows.sh counts \
+#     --min-called-males 7 --min-called-females 5 --min-alt-males 7 --min-alt-females 5 --max-alt-opposite 1
+#   ... --alt-dosage 1        # only genotypes with exactly 1 ALT copy (0/0/0/1 in a tetraploid)
+#   ... --min-alt-dosage 2    # genotypes with >= 2 ALT copies
+# Ploidy is not an option here: it comes from the table written by stage 3,
+# i.e. the ploidy the genotypes were called with.
 source "$(dirname "$0")/common.sh"
 
 RUN="${1:?usage: $0 RUN_NAME [classifier options]}"
 shift
+require_ploidy_table
 IN="${OUTDIR}/03_merged"
 OUT="${OUTDIR}/05_snp_windows/${RUN}"
 mkdir -p "$OUT"
@@ -28,6 +34,7 @@ echo "$*" > "$OUT/classifier_options.txt"
 python "$BIN/classify_sex_specific_snps.py" \
   --genotypes "$IN/merged.genotypes.tsv" --vcf-samples "$IN/vcf_samples.txt" \
   --males "$IN/males.txt" --females "$IN/females.txt" \
+  --sample-ploidy "$PLOIDY_TABLE" \
   --out "$OUT/sex_specific_sites.tsv" "$@" | tee "$OUT/classifier.log"
 
 for sex in male female; do

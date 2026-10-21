@@ -38,7 +38,7 @@ SFX="k${K}.ci${KMER_MIN_COUNT}"
 for S in $(samples_of); do
   if [ -f "$KDIR/${S}.${SFX}.kmc_pre" ]; then continue; fi
   log "KMC: $S"
-  printf '%s\n%s\n' "$(sample_field "$S" 3)" "$(sample_field "$S" 4)" > "$TMP/${S}.files"
+  printf '%s\n%s\n' "$(sample_field "$S" fq1)" "$(sample_field "$S" fq2)" > "$TMP/${S}.files"
   kmc -k"$K" -ci"$KMER_MIN_COUNT" -t"$THREADS" @"$TMP/${S}.files" "$KDIR/${S}.${SFX}" "$TMP" > "$TMP/${S}.kmc.log"
 done
 

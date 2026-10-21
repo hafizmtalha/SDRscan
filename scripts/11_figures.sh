@@ -14,10 +14,10 @@ TAG="${WINDOW}_${STEP}"
 COLOURS=(purple green orange blue red brown)
 MARKERS=(o '^' s D v P)
 
-# SNP runs
-for entry in "${SNP_RUNS[@]}"; do
-  run="${entry%%|*}"
-  d="${OUTDIR}/05_snp_windows/$run"
+# SNP runs (every run folder, including the generated dosage-class runs)
+for d in "${OUTDIR}/05_snp_windows"/*/; do
+  d="${d%/}"
+  run=$(basename "$d")
   [ -f "$d/male_specific_windows_${TAG}.bed" ] || continue
   python "$BIN/plot_manhattan_windows.py" \
     --track "Male-specific SNPs=$d/male_specific_windows_${TAG}.bed:green:o" \

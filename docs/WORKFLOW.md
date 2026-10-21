@@ -76,7 +76,13 @@ freebayes -f REF -p PLOIDY -C 4 --min-mapping-quality 20 --min-base-quality 20 \
 2. The first calls were diploid (`-p 2`). The population could be
    tetraploid, so **every sample was re-called with `-p 4`**, and the
    tetraploid calls were used from then on.
-3. One sample repeatedly produced an empty VCF. The cause was its BAM;
+3. Because of (2), ploidy is now a required setting (`PLOIDY`, or a
+   per-sample `ploidy` column) with no default. Stage 2 records the ploidy
+   each sample was called at, stage 3 refuses to merge if the config has
+   changed since, and every later tool reads genotypes at that ploidy. A
+   genotype with the wrong number of alleles is reported instead of being
+   silently miscounted.
+4. One sample repeatedly produced an empty VCF. The cause was its BAM;
    re-aligning fixed it. The script now stops on a 0-byte VCF instead of
    letting it through silently.
 
@@ -189,13 +195,18 @@ variants are male-specific. In ZW, W-linked variants are female-specific.
 | most of one sex, 0 of the other ("strict") | ~80 | good for **validating** them |
 
 Aim for a few hundred sites. Scale the thresholds with sample size: with
-9 males and 7 females we used about 7/5 for the focal/opposite sex.
+9 males and 7 females we used about 7/5 for the focal/opposite sex. The
+classifier now accepts fractions (`--min-alt-males 0.8`), so a threshold set
+carries over to a study of a different size. `SNP_RUNS` in the config holds
+any number of named threshold sets, and each run logs the counts the
+fractions resolved to.
 
 **Genotype-class runs.** With tetraploid calls, "ALT present" can mean one
 ALT copy (0/0/0/1) or two (0/0/1/1), which behave differently.
 `--alt-dosage 1` and `--alt-dosage 2` count only one class each, which shows
 whether the signal comes from single-dose variants, as expected for a
-sex-limited haplotype.
+sex-limited haplotype. For any ploidy P, `SNP_DOSAGE_CLASSES=auto` runs every
+class from 1 to P−1.
 
 **Led to:** a ranked list of candidate intervals on several chromosomes, each
 supported by only a handful of windows → is any of them real? (Step 6)

@@ -12,10 +12,20 @@ OUT="${OUTDIR}/03_merged"
 mkdir -p "$OUT/norm"
 
 mapfile -t SAMPLE_LIST < <(samples_of)
+
+# Every VCF must have been called at the ploidy currently declared for its sample
+for S in "${SAMPLE_LIST[@]}"; do
+  called=$(cat "$IN/${S}.ploidy" 2>/dev/null || echo "unknown")
+  want=$(sample_ploidy "$S")
+  [ "$called" = "$want" ] || die "$S was called at ploidy '$called' but the config says $want; re-run stage 2"
+done
+write_sample_ploidy "$OUT/sample_ploidy.tsv"
+log "Ploidy per sample written to $OUT/sample_ploidy.tsv"
+
 NORMED=()
 for S in "${SAMPLE_LIST[@]}"; do
   out="$OUT/norm/${S}.norm.vcf.gz"
-  if [ ! -s "$out" ]; then
+  if [ ! -s "$out" ] || [ "$IN/${S}.vcf.gz" -nt "$out" ]; then
     log "$S: normalise + rename"
     # freebayes names the sample after the read group; force it to the sample ID
     # so bcftools merge does not see duplicate or "unknown" sample names.

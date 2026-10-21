@@ -20,6 +20,12 @@ if [ ! -f "$FINDZX_DIR/workflow/findZX" ]; then
   exit 1
 fi
 
+if [ "$(max_ploidy)" -gt 2 ]; then
+  log "NOTE: PLOIDY > 2. findZX calls its own variants with Platypus, which assumes diploidy,"
+  log "      so findZX heterozygosity is a diploid approximation here; its read-depth results are"
+  log "      unaffected. Rely on the SNP (stage 5) and k-mer (stage 8) analyses for allele-level evidence."
+fi
+
 RUNS=("$@")
 [ ${#RUNS[@]} -gt 0 ] || RUNS=("${FINDZX_RUNS[@]}")
 OUT="$(mkdir -p "${OUTDIR}/04_findzx" && cd "${OUTDIR}/04_findzx" && pwd)"

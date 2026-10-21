@@ -24,6 +24,11 @@ OUT="${OUTDIR}/06_candidates"
 mkdir -p "$OUT"
 TAG="${WINDOW}_${STEP}"
 [ "$FOCAL_SEX" = "M" ] && FOCAL=male || FOCAL=female
+require_ploidy_table
+GT_ARGS=(--vcf-samples "$IN/vcf_samples.txt" --males "$IN/males.txt" --females "$IN/females.txt"
+         --sample-ploidy "$PLOIDY_TABLE")
+STRONG_ALT="${STRONG_ALT:-0.75}"                  # "strong" site: ALT in >= 75% of the focal sex
+STRONG_MAX_OPPOSITE="${STRONG_MAX_OPPOSITE:-1}"   # ... and in <= 1 of the other sex
 
 # a. Do strict sites fall inside the relaxed candidate intervals?
 if [ -d "$STRICT" ]; then
@@ -51,27 +56,20 @@ for region in "${REGIONS[@]}"; do
   bcftools query -f '%CHROM\t%POS[\t%GT]\n' "$d/region.vcf.gz" > "$d/region.genotypes.tsv"
 
   # c. genotype inspection
-  python "$BIN/inspect_candidate_region.py" --genotypes "$d/region.genotypes.tsv" \
-    --vcf-samples "$IN/vcf_samples.txt" --males "$IN/males.txt" --females "$IN/females.txt" \
-    --prefix "$d/inspect"
+  python "$BIN/inspect_candidate_region.py" --genotypes "$d/region.genotypes.tsv" "${GT_ARGS[@]}" \
+    --strong-alt "$STRONG_ALT" --strong-max-opposite "$STRONG_MAX_OPPOSITE" --prefix "$d/inspect"
 
-  # d. PCA (needs enough sites; skipped with a message otherwise)
-  python "$BIN/pca_from_gt_presence.py" --genotypes "$d/region.genotypes.tsv" \
-    --vcf-samples "$IN/vcf_samples.txt" --males "$IN/males.txt" --females "$IN/females.txt" \
-    --outprefix "$d/pca" --min-sites 100 --max-sites 20000 || log "PCA skipped for $region"
+  # d. PCA, presence and (for polyploids) dosage encoding; skipped if too few sites
+  for enc in presence $([ "$(max_ploidy)" -gt 2 ] && echo dosage); do
+    python "$BIN/pca_from_gt_presence.py" --genotypes "$d/region.genotypes.tsv" "${GT_ARGS[@]}" \
+      --encoding "$enc" --outprefix "$d/pca_${enc}" --min-sites 100 --max-sites 20000 \
+      || log "PCA ($enc) skipped for $region"
+  done
 
   # e. sex-label permutation (strong focal-sex-biased sites in the region)
-  if [ "$FOCAL_SEX" = "M" ]; then
-    PM="$IN/males.txt"; PF="$IN/females.txt"
-  else
-    PM="$IN/females.txt"; PF="$IN/males.txt"     # swap roles to test female bias
-  fi
-  n_focal=$(wc -l < "$PM"); n_other=$(wc -l < "$PF")
-  python "$BIN/permute_sex_labels.py" --genotypes "$d/region.genotypes.tsv" \
-    --vcf-samples "$IN/vcf_samples.txt" --males "$PM" --females "$PF" \
-    --chrom "$CHROM" --start "$START" --end "$END" --nperm "$PERMUTATIONS" \
-    --min-called-male $((n_focal * 3 / 4)) --min-called-female $((n_other * 3 / 4)) \
-    --min-male-alt $((n_focal * 3 / 4)) --max-female-alt 1 \
+  python "$BIN/permute_sex_labels.py" --genotypes "$d/region.genotypes.tsv" "${GT_ARGS[@]}" \
+    --focal-sex "$FOCAL_SEX" --chrom "$CHROM" --start "$START" --end "$END" --nperm "$PERMUTATIONS" \
+    --min-called "$STRONG_ALT" --min-alt "$STRONG_ALT" --max-opposite "$STRONG_MAX_OPPOSITE" \
     --outprefix "$d/permutation"
 
   # f. chromosome enrichment of focal-sex-specific windows

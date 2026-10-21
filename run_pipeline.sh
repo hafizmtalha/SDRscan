@@ -46,6 +46,22 @@ for stage in "${STAGES[@]}"; do
         # shellcheck disable=SC2086
         "$S/05_sex_specific_snp_windows.sh" "${entry%%|*}" ${entry#*|}
       done
+      # Dosage-class runs, derived from the ploidy the genotypes were called with
+      classes="${SNP_DOSAGE_CLASSES:-}"
+      P=$(max_ploidy)
+      [ "$classes" = "auto" ] && classes=$(seq -s ' ' 1 $((P - 1)))
+      if [ -n "$classes" ]; then
+        base_opts=""
+        for entry in "${SNP_RUNS[@]}"; do
+          [ "${entry%%|*}" = "$SNP_DOSAGE_BASE" ] && base_opts="${entry#*|}"
+        done
+        [ -n "$base_opts" ] || die "SNP_DOSAGE_BASE '$SNP_DOSAGE_BASE' is not a SNP_RUNS name"
+        for c in $classes; do
+          [ "$c" -ge 1 ] && [ "$c" -le "$P" ] || die "dosage class $c outside 1..$P (ploidy)"
+          # shellcheck disable=SC2086
+          "$S/05_sex_specific_snp_windows.sh" "${SNP_DOSAGE_BASE}_dose${c}" $base_opts --alt-dosage "$c"
+        done
+      fi
       log "Now inspect ${OUTDIR}/05_snp_windows/*/sex_specific_snp_windows.png and"
       log "merged_candidate_intervals.tsv, then set CANDIDATES in the config and run stages 6 7."
       ;;

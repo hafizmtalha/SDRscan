@@ -7,12 +7,13 @@
 #   scripts/07_leave_one_out.sh M CHROM START END [classifier options]
 # e.g.
 #   scripts/07_leave_one_out.sh M chr_07 8200000 9000000 \
-#     --min-called-males 4 --min-called-females 4 --min-alt-males 4 --min-alt-females 4 --max-alt-opposite 1
+#     --min-called-males 0.75 --min-called-females 0.75 --min-alt-males 0.75 --min-alt-females 0.75 --max-alt-opposite 1
 source "$(dirname "$0")/common.sh"
 
 SEX="${1:?usage: $0 M|F CHROM START END [classifier options]}"
 CHROM="$2"; START="$3"; END="$4"
 shift 4
+require_ploidy_table
 IN="${OUTDIR}/03_merged"
 OUT="${OUTDIR}/07_leave_one_out"
 mkdir -p "$OUT"
@@ -31,6 +32,7 @@ for drop in "${FOCAL_SAMPLES[@]}"; do
   python "$BIN/classify_sex_specific_snps.py" \
     --genotypes "$IN/merged.genotypes.tsv" --vcf-samples "$IN/vcf_samples.txt" \
     --males "$d/males.txt" --females "$d/females.txt" \
+    --sample-ploidy "$PLOIDY_TABLE" \
     --out "$d/sex_specific_sites.tsv" "$@" > "$d/classifier.log"
 
   awk -v c="${FOCAL}_specific" 'BEGIN{OFS="\t"} NR>1 && $3==c {print $1,$2-1,$2}' \

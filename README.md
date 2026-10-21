@@ -50,6 +50,38 @@ of runs for each stage: `FINDZX_RUNS`, `SNP_RUNS` (threshold sets),
 (female assembly for XY, male assembly for ZW), keep two config files with
 different `REF`/`OUTDIR` and run each with `CONFIG=...`.
 
+### Ploidy (required)
+
+`PLOIDY` has no default: set it for your organism (2, 3, 4, 6, ...). For
+mixed-ploidy populations add a `ploidy` column to the sample sheet (`NA` =
+use `PLOIDY`). The ploidy flows through the whole pipeline:
+
+| Stage | How ploidy is used |
+|---|---|
+| 2 | `freebayes -p <ploidy>` per sample; the value is saved as `<sample>.ploidy` and a sample is re-called if it changes |
+| 3 | refuses to merge VCFs called at a different ploidy than configured; writes `sample_ploidy.tsv` |
+| 5–7 | every genotype is read at its sample's ploidy; genotypes with the wrong number of alleles are treated as missing and reported; `--alt-dosage` is checked against 1..ploidy; dosage-class runs default to 1..ploidy−1 |
+| 6 | for ploidy > 2 a second PCA uses ALT dosage / ploidy instead of presence/absence |
+| 4 | findZX does its own diploid variant calling (Platypus): with ploidy > 2 its heterozygosity output is approximate (its depth output is unaffected), and the pipeline says so |
+| 8 | k-mers are ploidy-independent |
+
+### SNP thresholds
+
+Each `SNP_RUNS` entry is a name plus any classifier options, so you can define
+as many threshold sets as you like. You can also run one directly:
+
+```bash
+scripts/05_sex_specific_snp_windows.sh my_run \
+  --min-called-males 0.8 --min-called-females 0.8 \
+  --min-alt-males 0.9 --min-alt-females 0.9 --max-alt-opposite 1 [--alt-dosage 1]
+```
+
+Thresholds are counts (`7`) or fractions of that sex (`0.8` = 80%, rounded
+up), so the same settings work for 10 or 100 samples. Every run writes the
+exact thresholds it resolved to and the site counts to `classifier.log`.
+`SNP_DOSAGE_CLASSES` (`auto`, `"1 2"` or empty) repeats one run per ALT dosage
+class. Run `python bin/classify_sex_specific_snps.py --help` for all options.
+
 ## Run
 
 ```bash

@@ -18,8 +18,8 @@ SAMPLE_LIST=("$@")
 [ ${#SAMPLE_LIST[@]} -gt 0 ] || mapfile -t SAMPLE_LIST < <(samples_of)
 
 for S in "${SAMPLE_LIST[@]}"; do
-  R1=$(sample_field "$S" 3)
-  R2=$(sample_field "$S" 4)
+  R1=$(sample_field "$S" fq1)
+  R2=$(sample_field "$S" fq2)
   FINAL="$OUT/bam/${S}.RG.bam"
   [ "$MARK_DUPLICATES" = "1" ] && FINAL="$OUT/bam/${S}.RG.dedup.bam"
   if [ -s "$FINAL" ]; then
