@@ -1,4 +1,4 @@
-name: sex-region
+name: sdrscan
 channels:
   - conda-forge
   - bioconda

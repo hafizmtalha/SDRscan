@@ -14,6 +14,8 @@ SEX="${1:?usage: $0 M|F CHROM START END [classifier options]}"
 CHROM="$2"; START="$3"; END="$4"
 shift 4
 require_ploidy_table
+require_both_sexes
+[ "$(n_of "$SEX")" -ge 3 ] || die "leave-one-out needs at least 3 samples of the focal sex ($SEX); have $(n_of "$SEX")"
 IN="${OUTDIR}/03_merged"
 OUT="${OUTDIR}/07_leave_one_out"
 mkdir -p "$OUT"

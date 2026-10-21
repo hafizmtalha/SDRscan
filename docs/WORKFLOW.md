@@ -1,4 +1,4 @@
-# Workflow: how the analysis was built, step by step
+# SDRscan workflow: how the analysis was built, step by step
 
 This document follows the analysis in the order it was actually done. For
 each step it gives the question, the script that answers it, the key

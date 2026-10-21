@@ -25,6 +25,7 @@ mkdir -p "$OUT"
 TAG="${WINDOW}_${STEP}"
 [ "$FOCAL_SEX" = "M" ] && FOCAL=male || FOCAL=female
 require_ploidy_table
+require_both_sexes
 GT_ARGS=(--vcf-samples "$IN/vcf_samples.txt" --males "$IN/males.txt" --females "$IN/females.txt"
          --sample-ploidy "$PLOIDY_TABLE")
 STRONG_ALT="${STRONG_ALT:-0.75}"                  # "strong" site: ALT in >= 75% of the focal sex

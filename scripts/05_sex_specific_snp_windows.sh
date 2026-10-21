@@ -24,6 +24,7 @@ source "$(dirname "$0")/common.sh"
 RUN="${1:?usage: $0 RUN_NAME [classifier options]}"
 shift
 require_ploidy_table
+require_both_sexes
 IN="${OUTDIR}/03_merged"
 OUT="${OUTDIR}/05_snp_windows/${RUN}"
 mkdir -p "$OUT"

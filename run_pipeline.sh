@@ -25,6 +25,7 @@ cd "$(dirname "$0")"
 S=scripts
 source "$S/common.sh"
 
+sample_size_report
 STAGES=("$@")
 if [ ${#STAGES[@]} -eq 0 ]; then
   STAGES=(1 2 3 4 5)
@@ -67,6 +68,10 @@ for stage in "${STAGES[@]}"; do
       ;;
     6) "$S/06_candidate_followup.sh" ;;
     7)
+      if [ "$(n_of "$FOCAL_SEX")" -lt 3 ]; then
+        log "Skipping leave-one-out: needs >= 3 samples of the focal sex ($FOCAL_SEX)"
+        continue
+      fi
       relaxed_opts=""
       for entry in "${SNP_RUNS[@]}"; do
         [ "${entry%%|*}" = "$RELAXED_RUN" ] && relaxed_opts="${entry#*|}"

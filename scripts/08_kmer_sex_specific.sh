@@ -15,13 +15,16 @@
 #
 # Usage:
 #   scripts/08_kmer_sex_specific.sh MSK|FSK MIN_PRESENT TAG=ref.fa [TAG=ref.fa ...]
+# MIN_PRESENT: a count (7), a fraction of the focal sex (0.85), "all", or
+# "all-1" (tolerates one low-coverage or mis-sexed sample; the default).
 # e.g.
 #   scripts/08_kmer_sex_specific.sh MSK 7 REF1=/refs/hapA.fa REF2=/refs/hapB.fa
 source "$(dirname "$0")/common.sh"
 
 MODE="${1:?usage: $0 MSK|FSK MIN_PRESENT TAG=ref.fa ...}"
-MIN_PRESENT="${2:?MIN_PRESENT required}"
+MIN_PRESENT_SPEC="${2:?MIN_PRESENT required}"
 shift 2
+require_both_sexes
 [ $# -gt 0 ] || { echo "Give at least one TAG=ref.fa" >&2; exit 1; }
 case "$MODE" in
   MSK) FOCAL=M; OTHER=F ;;
@@ -58,6 +61,8 @@ union_all() {
 # 2. Focal-sex presence set
 mapfile -t FOC < <(samples_of "$FOCAL")
 mapfile -t OPP < <(samples_of "$OTHER")
+MIN_PRESENT=$(resolve_count "$MIN_PRESENT_SPEC" "${#FOC[@]}")
+[ "$MIN_PRESENT" -ge 2 ] || log "WARNING: k-mers required in only $MIN_PRESENT ${FOCAL} sample(s); expect many false positives"
 log "${MODE}: ${#FOC[@]} focal samples, require presence in >= ${MIN_PRESENT}"
 PRES=()
 for S in "${FOC[@]}"; do
