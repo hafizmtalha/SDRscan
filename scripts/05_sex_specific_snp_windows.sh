@@ -6,20 +6,20 @@
 #   -> merged candidate intervals -> per-chromosome counts -> genome-wide plot
 #
 # Usage:
-#   scripts/04_sex_specific_snp_windows.sh RUN_NAME [classifier options]
+#   scripts/05_sex_specific_snp_windows.sh RUN_NAME [classifier options]
 #
 # Classifier options are passed to bin/classify_sex_specific_snps.py, e.g.
-#   scripts/04_sex_specific_snp_windows.sh strict \
+#   scripts/05_sex_specific_snp_windows.sh strict \
 #     --min-called-males 7 --min-called-females 5 \
 #     --min-alt-males 7 --min-alt-females 5 --max-alt-opposite 1
-#   scripts/04_sex_specific_snp_windows.sh dosage1 ... --alt-dosage 1   # 0/0/0/1 only
-#   scripts/04_sex_specific_snp_windows.sh dosage2 ... --alt-dosage 2   # 0/0/1/1 only
+#   scripts/05_sex_specific_snp_windows.sh dosage1 ... --alt-dosage 1   # 0/0/0/1 only
+#   scripts/05_sex_specific_snp_windows.sh dosage2 ... --alt-dosage 2   # 0/0/1/1 only
 source "$(dirname "$0")/common.sh"
 
 RUN="${1:?usage: $0 RUN_NAME [classifier options]}"
 shift
 IN="${OUTDIR}/03_merged"
-OUT="${OUTDIR}/04_snp_windows/${RUN}"
+OUT="${OUTDIR}/05_snp_windows/${RUN}"
 mkdir -p "$OUT"
 W="$WINDOW"; S="$STEP"
 TAG="${W}_${S}"

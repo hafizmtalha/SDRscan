@@ -1,0 +1,3 @@
+[submodule "external/findZX"]
+	path = external/findZX
+	url = https://github.com/hsigeman/findZX.git

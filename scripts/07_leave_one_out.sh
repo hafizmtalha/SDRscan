@@ -4,9 +4,9 @@
 # still appears among the merged candidate intervals.
 #
 # Usage:
-#   scripts/05_leave_one_out.sh M CHROM START END [classifier options]
+#   scripts/07_leave_one_out.sh M CHROM START END [classifier options]
 # e.g.
-#   scripts/05_leave_one_out.sh M chr_07 8200000 9000000 \
+#   scripts/07_leave_one_out.sh M chr_07 8200000 9000000 \
 #     --min-called-males 4 --min-called-females 4 --min-alt-males 4 --min-alt-females 4 --max-alt-opposite 1
 source "$(dirname "$0")/common.sh"
 
@@ -14,7 +14,7 @@ SEX="${1:?usage: $0 M|F CHROM START END [classifier options]}"
 CHROM="$2"; START="$3"; END="$4"
 shift 4
 IN="${OUTDIR}/03_merged"
-OUT="${OUTDIR}/05_leave_one_out"
+OUT="${OUTDIR}/07_leave_one_out"
 mkdir -p "$OUT"
 [ "$SEX" = "M" ] && FOCAL="male" || FOCAL="female"
 [ "$SEX" = "M" ] && OTHER="female" || OTHER="male"

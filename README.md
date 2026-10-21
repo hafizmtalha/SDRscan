@@ -1,212 +1,127 @@
 # sex-region-pipeline
 
-Scripts for finding the sex-determining / sex-linked region of a genome from
-whole-genome resequencing of males and females. It combines three independent
-lines of evidence and a set of robustness checks:
+A pipeline for locating the sex-determining / sex-linked region of a genome
+from whole-genome resequencing of males and females, and for telling XY from
+ZW. It combines independent lines of evidence and checks each candidate
+before trusting it:
 
-| Evidence | Idea | Reference needed? |
+| Evidence | Idea | Stage |
 |---|---|---|
-| **A. Depth & heterozygosity** ([findZX](https://github.com/hsigeman/findZX)) | Sex-linked regions differ between sexes in read depth and heterozygosity | yes |
-| **B. Sex-specific SNP density** | Count SNPs whose ALT allele is (almost) only found in one sex, in sliding windows | yes |
-| **C. Sex-specific k-mers** | k-mers present in most of one sex and absent from every individual of the other, mapped back to the genome | only for placing them |
-| **D. Assembly comparison** | Whole-genome dotplots between male/female (or phased) assemblies to look for structural differences and check that chromosome numbering agrees | — |
+| **Depth & heterozygosity** ([findZX](https://github.com/hsigeman/findZX)) | a sex-linked region differs between sexes in read depth and heterozygosity | 4 |
+| **Sex-specific SNP density** | SNPs whose ALT allele is (almost) only found in one sex, counted in sliding windows | 5 |
+| **Candidate checks** | strict-site overlap, genotype inspection, PCA, permutation tests, leave-one-out | 6–7 |
+| **Sex-specific k-mers** | sequence present in most of one sex and absent from all of the other, mapped back to each assembly | 8–9 |
+| **Assembly comparison** | whole-genome / per-chromosome dotplots and a chromosome correspondence table between assemblies | 10 |
 
-Robustness checks: strict vs relaxed thresholds, candidate-region genotype
-inspection, leave-one-out, PCA, sex-label permutation, per-chromosome
-enrichment permutation, randomised-sex findZX control.
+Genotypes are reduced to ALT-present / ALT-absent per sample, so the SNP
+analyses work for diploids and polyploids (it was built on tetraploid calls).
 
-Genotypes are handled as ALT-present / ALT-absent per sample, so everything
-works for diploids and polyploids (it was developed on tetraploid calls).
+**[docs/WORKFLOW.md](docs/WORKFLOW.md)** walks through the analysis in the
+order it was done: why each step was added, what it showed, how thresholds
+were chosen, and the lessons learned.
 
 ---
 
-## Requirements
+## Install
 
 ```bash
-conda env create -f environment.yml
+git clone --recurse-submodules https://github.com/<user>/sex-region-pipeline.git
+cd sex-region-pipeline
+conda env create -f environment.yml          # tools for stages 1-3, 5-11
+conda env create -f external/findZX/environment.yml -n findZX   # stage 4
 conda activate sex-region
 ```
 
-fastp, FastQC, MultiQC, BWA, samtools, GATK4 (read groups only), freebayes,
-bcftools/htslib, bedtools, KMC3, seqtk, MUMmer4, Python 3 (pandas, numpy,
-matplotlib, scikit-learn), R (ggplot2, dplyr). findZX is installed separately
-from its own repository.
+findZX is included as a git submodule (`external/findZX`, pinned commit) and
+used unmodified. If you cloned without `--recurse-submodules`, run
+`git submodule update --init`.
 
-## Setup
-
-```bash
-cp config/pipeline.env.example config/pipeline.env     # edit paths, threads, ploidy
-cp config/samples.example.tsv  config/samples.tsv      # sample <tab> sex (M/F) <tab> fq1 <tab> fq2
-```
-
-All stage scripts read `config/pipeline.env` (or `CONFIG=/other/file`) and
-write under `OUTDIR` (default `results/`). Run long stages with `nohup` or in
-`tmux`; on shared servers keep `THREADS` and `MAX_PARALLEL_SAMPLES` modest.
-
----
-
-## Workflow
-
-```
-reads ──01──> BAM ──02──> per-sample VCF ──03──> merged, filtered SNPs + genotype table
-                                                     │
-                     ┌───────────────────────────────┼─────────────────────────┐
-                     04 sex-specific SNP windows     05 leave-one-out         bin/ PCA, permutations
-reads ─────────────> 06 sex-specific k-mers ──> 07 overlap between runs
-reads ─────────────> findZX (XY / ZW / shuffled)
-assemblies ────────> 08 nucmer ──> R/ dotplots + chromosome correspondence
-```
-
-### 1. QC, trimming, alignment — `scripts/01_qc_align.sh`
-
-fastp → FastQC (raw and trimmed) → `bwa mem` → `samtools sort/index` →
-GATK `AddOrReplaceReadGroups` (sample name = sample ID) → MultiQC.
-Set `MARK_DUPLICATES=1` to also run `MarkDuplicatesSpark`.
-
-### 2. Variant calling — `scripts/02_call_variants.sh`
-
-`freebayes -p PLOIDY -C 4 --min-mapping-quality 20 --min-base-quality 20
---genotype-qualities --use-mapping-quality`, one sample per job,
-`MAX_PARALLEL_SAMPLES` at a time. Use `PLOIDY=4` if the population may be
-tetraploid. Empty VCFs are reported as errors (a truncated BAM gave 0-byte
-output for one sample).
-
-### 3. Merge and filter — `scripts/03_merge_vcfs.sh`
-
-`bcftools norm -m -both` → rename the sample to its ID → `bcftools merge` →
-`QUAL >= 30 && INFO/DP >= 5` → SNPs only → biallelic only. Writes:
-
-- `merged.filtered.snps.vcf.gz`
-- `merged.genotypes.tsv` (`bcftools query -f '%CHROM\t%POS[\t%GT]\n'`)
-- `vcf_samples.txt` (column order), `males.txt`, `females.txt`
-
-### 4. Sex-specific SNP density — `scripts/04_sex_specific_snp_windows.sh RUN [options]`
-
-1. **Classify** (`bin/classify_sex_specific_snps.py`). A site is
-   *male-specific* if ≥ `--min-alt-males` males carry ALT and ≤
-   `--max-alt-opposite` females do (both sexes having enough called
-   genotypes), and vice versa for *female-specific*.
-2. Sites → BED → `bedtools makewindows` (`WINDOW`/`STEP`, main chromosomes
-   only) → `bedtools intersect -c`.
-3. Top 50 windows per sex → merged candidate intervals
-   (`bedtools merge` and `bin/merge_top_candidate_windows.py`, which reports
-   `N_WINDOWS`, `MAX_COUNT`, `MEAN_COUNT`) → counts per chromosome →
-   genome-wide plot.
-
-Run it several times with different thresholds (one `RUN` name each). How
-strict to be depends on sample size — aim for a few hundred sites, not 4 and
-not 50,000:
+## Configure
 
 ```bash
-# relaxed: discovery
-scripts/04_sex_specific_snp_windows.sh relaxed \
-  --min-called-males 6 --min-called-females 5 --min-alt-males 6 --min-alt-females 5 --max-alt-opposite 2
-# strict: validation (no ALT allowed in the other sex)
-scripts/04_sex_specific_snp_windows.sh strict \
-  --min-called-males 7 --min-called-females 5 --min-alt-males 7 --min-alt-females 5 --max-alt-opposite 0
-# genotype-class runs (polyploids): count only single-dose or only double-dose ALT genotypes
-scripts/04_sex_specific_snp_windows.sh dose1 ... --alt-dosage 1     # 0/0/0/1
-scripts/04_sex_specific_snp_windows.sh dose2 ... --alt-dosage 2     # 0/0/1/1
+cp config/pipeline.env.example config/pipeline.env    # paths, threads, ploidy, run lists
+cp config/samples.example.tsv  config/samples.tsv     # sample <tab> sex (M/F) <tab> fq1 <tab> fq2
+cp config/pairs.example.tsv    config/pairs.tsv       # assemblies to compare (stage 10)
 ```
 
-To test an XY system, call against a reference from the homogametic sex
-(female) and look for **male**-specific sites; for ZW use a male reference and
-look for **female**-specific sites. Running both is a useful contrast.
+`pipeline.env` is plain bash. Besides paths and resources it holds the list
+of runs for each stage: `FINDZX_RUNS`, `SNP_RUNS` (threshold sets),
+`CANDIDATES`, `KMER_RUNS` and `KMER_REFS`. To analyse against two references
+(female assembly for XY, male assembly for ZW), keep two config files with
+different `REF`/`OUTDIR` and run each with `CONFIG=...`.
 
-#### Following up candidates
+## Run
 
-| Script | Question it answers |
+```bash
+./run_pipeline.sh            # stages 1-5: align, call, merge, findZX, SNP windows
+# look at results/05_snp_windows/*/sex_specific_snp_windows.png and
+# merged_candidate_intervals.tsv, then set CANDIDATES in the config
+./run_pipeline.sh 6 7        # follow up the candidates
+./run_pipeline.sh 8 9 10 11  # k-mers, k-mer overlaps, dotplots, figures
+./run_pipeline.sh all        # everything (6-7 only if CANDIDATES is set)
+```
+
+Stages skip outputs that already exist, so a failed run can be resumed. Run
+long jobs in `tmux` or with `nohup`; on shared servers keep `THREADS` and
+`MAX_PARALLEL_SAMPLES` modest.
+
+| Stage | Script | Does | Main outputs (`results/`) |
+|---|---|---|---|
+| 1 | `01_qc_align.sh` | fastp, FastQC, bwa mem, sort, read groups, MultiQC | `01_align/bam/*.RG.bam` |
+| 2 | `02_call_variants.sh` | freebayes per sample (`PLOIDY`) | `02_vcf/*.vcf.gz` |
+| 3 | `03_merge_vcfs.sh` | norm, rename, merge, QUAL/DP filter, biallelic SNPs | `03_merged/merged.genotypes.tsv` |
+| 4 | `04_findzx.sh` | findZX XY / ZW / shuffled-sex runs | `04_findzx/<run>/results/` |
+| 5 | `05_sex_specific_snp_windows.sh` | classify sites, window counts, candidate intervals, plot | `05_snp_windows/<run>/` |
+| 6 | `06_candidate_followup.sh` | strict overlap, zoom, genotype inspection, PCA, permutations | `06_candidates/<region>/` |
+| 7 | `07_leave_one_out.sh` | drop each focal-sex sample, does the region persist? | `07_leave_one_out_<region>/summary.tsv` |
+| 8 | `08_kmer_sex_specific.sh` | KMC male/female-specific k-mers mapped to each reference | `08_kmer/{MSK,FSK}/windows/` |
+| 9 | `09_compare_kmer_runs.sh` | overlap of k-mer candidate peaks between runs | `09_kmer_overlap/overlap_summary.tsv` |
+| 10 | `10_nucmer_dotplots.sh` | nucmer + delta-filter + show-coords + mummerplot | `10_dotplots/<pair>/` |
+| 11 | `11_figures.sh` | Manhattan plots, R dotplots, chromosome correspondence | `11_figures/` |
+
+## Standalone tools (`bin/`)
+
+Every analysis step is also a standalone script with `--help`:
+
+| Tool | Purpose |
 |---|---|
-| `bin/strict_overlap_with_candidates.py` | Do strict sites fall inside the relaxed-threshold candidate intervals? |
-| `bin/inspect_candidate_region.py` / `bin/run_candidate_region_inspection.py` | Is a peak made of many repeated sex-biased SNPs or a few noisy sites? |
-| `bin/plot_candidate_chromosome.py` | What does the signal look like along one chromosome (Mb axis, shaded core)? |
-| `bin/pca_from_gt_presence.py` | Do samples split by sex in the candidate region? Does any sample cluster with the other sex (mis-sexing)? |
-| `bin/permute_sex_labels.py` | How often do random sex labellings give as many strong sex-biased sites in the region? |
-| `bin/window_enrichment_permutation.py` | Is one chromosome enriched for sex-specific SNPs/k-mers compared with random window sets? |
-| `scripts/05_leave_one_out.sh` | Does the candidate survive dropping each sample of the focal sex? |
-| `bin/plot_manhattan_windows.py` | Several runs/references on one Manhattan-style figure |
+| `classify_sex_specific_snps.py` | male-/female-specific sites from a genotype table (`--alt-dosage` for 0/0/0/1-only or 0/0/1/1-only runs) |
+| `plot_sex_specific_windows.py` | two-panel genome-wide window plot + top windows |
+| `merge_top_candidate_windows.py` | merge top windows into ranked candidate intervals |
+| `strict_overlap_with_candidates.py` | strict sites inside relaxed candidate intervals |
+| `inspect_candidate_region.py`, `run_candidate_region_inspection.py` | per-site sex bias in one / the top-N intervals |
+| `plot_candidate_chromosome.py` | zoomed chromosome plot (Mb), shaded core |
+| `pca_from_gt_presence.py` | PCA of a region; spot mis-sexed samples |
+| `permute_sex_labels.py` | sex-label permutation p-value for a region |
+| `window_enrichment_permutation.py` | is one chromosome enriched vs random window sets? |
+| `plot_manhattan_windows.py` | several runs/references on one Manhattan-style plot |
 
-Example: subset a region and run the PCA
+`findzx/make_units.py` writes findZX sample files (XY / ZW / `--shuffle`),
+and `findzx/shorten_chrom_names.sh` tidies findZX tables before replotting.
 
-```bash
-cd results/03_merged
-bcftools view -r chr_07:8000000-9000000 merged.filtered.snps.vcf.gz -Oz -o region.vcf.gz
-bcftools query -f '%CHROM\t%POS[\t%GT]\n' region.vcf.gz > region.genotypes.tsv
-python ../../bin/pca_from_gt_presence.py --genotypes region.genotypes.tsv --outprefix region_PCA \
-  --min-called 12 --min-sites 100 --max-sites 20000
-```
+## Requirements
 
-### 5. Sex-specific k-mers — `scripts/06_kmer_sex_specific.sh MSK|FSK MIN_PRESENT TAG=ref.fa ...`
+fastp, FastQC, MultiQC, BWA, samtools, GATK4 (read groups), freebayes,
+bcftools/htslib, bedtools, KMC3, seqtk, MUMmer4 (+ gnuplot for mummerplot),
+Python 3 (pandas, numpy, matplotlib, scikit-learn), R (ggplot2, dplyr), and
+findZX's own environment for stage 4. All except findZX are in
+`environment.yml`.
 
-1. KMC (`k=31`, `-ci2`) per sample.
-2. Focal-sex set: k-mers present in ≥ `MIN_PRESENT` focal individuals.
-3. Subtract the union of all opposite-sex k-mers → **MSK** (male-specific) or
-   **FSK** (female-specific) k-mers.
-4. Subsample 200k, `bwa mem` to each reference, keep MAPQ ≥ 20.
-5. Count per 25 kb / 5 kb window and per chromosome; merge the top 200
-   windows into candidate peaks.
-
-Map to every available assembly/haplotype: a sex-limited chromosome (Y/W) may
-only be assembled in one of them.
-
-```bash
-scripts/06_kmer_sex_specific.sh MSK 7 F1=female_h1.fa F2=female_h2.fa M1=male_h1.fa M2=male_h2.fa
-scripts/06_kmer_sex_specific.sh FSK 6 F1=female_h1.fa F2=female_h2.fa M1=male_h1.fa M2=male_h2.fa
-scripts/07_compare_kmer_runs.sh results/07_kmer_overlap \
-  MSK_F1=results/06_kmer/MSK/windows/kmer_MSK_candidates.F1.bed \
-  FSK_F1=results/06_kmer/FSK/windows/kmer_FSK_candidates.F1.bed
-```
-
-### 6. findZX — `findzx/`
-
-```bash
-python findzx/make_units.py --samples config/samples.tsv --system XY --out <findZX>/config/units_XY.tsv
-python findzx/make_units.py --samples config/samples.tsv --system ZW --out <findZX>/config/units_ZW.tsv
-python findzx/make_units.py --samples config/samples.tsv --system XY --shuffle --seed 7 \
-  --out <findZX>/config/units_shuffled.tsv       # negative control
-cd <findZX> && /path/to/sex-region-pipeline/findzx/run_findzx.sh config/my_config.yml 16
-```
-
-`findzx/config.example.yml` has the settings we used. Pair XY runs with a
-female reference and ZW runs with a male reference. After a run, check that
-the plots contain every sample. `findzx/shorten_chrom_names.sh` shortens
-chromosome names in the output tables before replotting.
-
-### 7. Assembly comparison — `scripts/08_nucmer_dotplots.sh pairs.tsv`
-
-`nucmer --mum` → `delta-filter -i 95 -l 1000 -q` → `show-coords` →
-`mummerplot`, for every pair in `config/pairs.example.tsv` (set
-`CHROM_REGEX` to drop unplaced scaffolds). Then:
-
-```bash
-Rscript R/dotplot_genome.R results/08_dotplots/A_vs_B/A_vs_B.filtered95.coords A B A_vs_B_genome
-Rscript R/dotplot_chromosome.R results/08_dotplots/A_vs_B/A_vs_B.filtered95.coords \
-  A_chr_08 B_chr_08 A B A_vs_B_chr8 10000 5
-```
-
-`dotplot_genome.R` also writes a **chromosome correspondence table** (which
-query chromosome receives most of each reference chromosome's aligned
-sequence). Check it before comparing results across assemblies, because
-chromosome numbers are not guaranteed to match between assemblies.
-
----
-
-## Interpreting results
-
-Treat a region as a strong candidate only when several independent lines of
-evidence agree. Sex-specific SNP density, sex-specific k-mers and findZX
-depth/heterozygosity are affected differently by sample size, repeats and
-mapping artefacts, so agreement between them carries more weight than any
-single peak. With small samples (around 10 individuals), single windows with
-2–3 sex-specific sites can be chance; use the strict overlap, leave-one-out
-and permutation outputs to judge them.
-
-## Repository layout
+## Layout
 
 ```
-bin/        Python tools (classification, windows, follow-up, statistics, plots)
-scripts/    Stage scripts 01–08 and shared common.sh
-findzx/     Helpers for running findZX (units, config, replotting)
-R/          Dotplot and chromosome correspondence plots
-config/     Example config, sample sheet and assembly pair list
+run_pipeline.sh   runs the stages in order
+scripts/          stage scripts 01-11 + common.sh
+bin/              Python analysis and plotting tools
+R/                dotplots and chromosome correspondence
+findzx/           findZX helpers (units, config template, replotting)
+external/findZX   findZX (git submodule)
+config/           example config, sample sheet, assembly pairs
+docs/WORKFLOW.md  step-by-step account of the analysis and its decisions
 ```
+
+## Citing
+
+If you use the findZX stage, cite the findZX paper as given in
+`external/findZX/README.md`. Cite the other tools (BWA, freebayes, bcftools,
+bedtools, KMC, MUMmer) as usual.

@@ -12,10 +12,10 @@ falls in the same slot.
 
 Example:
   plot_manhattan_windows.py \\
-    --track "REF1 male-specific SNPs=fh1/male_windows.bed:green:o" \\
-    --track "REF1 female-specific SNPs=fh1/female_windows.bed:purple:o" \\
-    --track "REF2 male-specific SNPs=mh1/male_windows.bed:blue:^" \\
-    --track "REF2 female-specific SNPs=mh1/female_windows.bed:orange:^" \\
+    --track "REF1 male-specific SNPs=refA/male_windows.bed:green:o" \\
+    --track "REF1 female-specific SNPs=refA/female_windows.bed:purple:o" \\
+    --track "REF2 male-specific SNPs=refB/male_windows.bed:blue:^" \\
+    --track "REF2 female-specific SNPs=refB/female_windows.bed:orange:^" \\
     --chrom-regex 'chr_?\\d+$' --title "Genome-wide sex-specific SNP density" \\
     --outprefix snp_manhattan
 """

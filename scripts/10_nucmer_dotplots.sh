@@ -10,14 +10,14 @@
 # make the publication versions of the plots.
 #
 # Usage:
-#   scripts/08_nucmer_dotplots.sh pairs.tsv [OUTDIR]
+#   scripts/10_nucmer_dotplots.sh pairs.tsv [OUTDIR]
 # pairs.tsv: one line per comparison: <ref.fa> <query.fa> <name>
 #
 # Environment overrides: THREADS MIN_IDENTITY MIN_LENGTH MIN_CLUSTER MIN_MATCH CHROM_REGEX
 set -euo pipefail
 
 PAIRS="${1:?usage: $0 pairs.tsv [OUTDIR]}"
-OUT="${2:-results/08_dotplots}"
+OUT="${2:-results/10_dotplots}"
 THREADS="${THREADS:-16}"
 MIN_IDENTITY="${MIN_IDENTITY:-95}"
 MIN_LENGTH="${MIN_LENGTH:-1000}"

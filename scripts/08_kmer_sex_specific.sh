@@ -14,9 +14,9 @@
 # leave-one-out intersections, which is how the original runs built it.
 #
 # Usage:
-#   scripts/06_kmer_sex_specific.sh MSK|FSK MIN_PRESENT TAG=ref.fa [TAG=ref.fa ...]
+#   scripts/08_kmer_sex_specific.sh MSK|FSK MIN_PRESENT TAG=ref.fa [TAG=ref.fa ...]
 # e.g.
-#   scripts/06_kmer_sex_specific.sh MSK 7 REF1=/refs/hapA.fa REF2=/refs/hapB.fa
+#   scripts/08_kmer_sex_specific.sh MSK 7 REF1=/refs/hapA.fa REF2=/refs/hapB.fa
 source "$(dirname "$0")/common.sh"
 
 MODE="${1:?usage: $0 MSK|FSK MIN_PRESENT TAG=ref.fa ...}"
@@ -29,7 +29,7 @@ case "$MODE" in
   *) echo "MODE must be MSK or FSK" >&2; exit 1 ;;
 esac
 
-OUT="${OUTDIR}/06_kmer"
+OUT="${OUTDIR}/08_kmer"
 KDIR="$OUT/kmc"; SETDIR="$OUT/sets/${MODE}"; TMP="$OUT/tmp"
 mkdir -p "$KDIR" "$SETDIR" "$TMP" "$OUT/${MODE}/fa" "$OUT/${MODE}/map" "$OUT/${MODE}/windows"
 SFX="k${K}.ci${KMER_MIN_COUNT}"

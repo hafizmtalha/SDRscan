@@ -16,6 +16,13 @@ chr_file: config/main_chromosomes.txt
   # one chromosome name per line, to plot only assembled chromosomes
   # (make it with: grep -E 'chr_?[0-9]+$' reference.fa.fai | cut -f1)
 
+chr_highlight: []            # required by findZX; chromosomes to highlight in plot type 4
+
+# Only used by the findZX-synteny workflow (not run here), but must be present
+synteny_name: none
+synteny_chr_file: None
+synteny_chr_highlight: []
+
 trim_reads: true
 trim_and_subsample: false
 subsample_only: false

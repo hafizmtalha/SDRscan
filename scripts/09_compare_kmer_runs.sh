@@ -5,9 +5,9 @@
 # first with --rename 'regex=replacement' (applied with sed -E to column 1).
 #
 # Usage:
-#   scripts/07_compare_kmer_runs.sh OUTDIR [--rename 'hap[12]_=hap_'] NAME=file.bed NAME=file.bed ...
+#   scripts/09_compare_kmer_runs.sh OUTDIR [--rename 'hap[12]_=hap_'] NAME=file.bed NAME=file.bed ...
 # e.g. (two haplotypes of the same assembly, names differ only by haplotype tag)
-#   scripts/07_compare_kmer_runs.sh results/07_kmer_overlap --rename '_H[12]_chr_=_chr_' \
+#   scripts/09_compare_kmer_runs.sh results/07_kmer_overlap --rename '_H[12]_chr_=_chr_' \
 #     MSK_A1=.../kmer_MSK_candidates.A1.bed MSK_A2=.../kmer_MSK_candidates.A2.bed \
 #     FSK_A1=.../kmer_FSK_candidates.A1.bed FSK_A2=.../kmer_FSK_candidates.A2.bed
 set -euo pipefail
