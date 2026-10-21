@@ -1,0 +1,35 @@
+# findZX config used for the runs (copy into the findZX checkout's config/).
+# Only the fields we changed from findZX's config_template.yml are annotated.
+
+threads_max: 16              # keep below the server's free cores; findZX runs for days
+mem_max: 8000
+
+run_name: my_run             # outputs go to results/<run_name>/
+
+units: config/units.tsv      # made with findzx/make_units.py (always check it lists every sample)
+
+ref_genome: /path/to/reference.fa   # not gzipped
+
+window_sizes: [25000, 50000, 100000]
+
+chr_file: config/main_chromosomes.txt
+  # one chromosome name per line, to plot only assembled chromosomes
+  # (make it with: grep -E 'chr_?[0-9]+$' reference.fa.fai | cut -f1)
+
+trim_reads: true
+trim_and_subsample: false
+subsample_only: false
+subsample_basepairs: 1888226
+
+mismatch_settings: [0.0, 0.2]
+minSizeScaffold: "10000"
+
+params:
+  trimmomatic:
+    pe:
+      trimmer:
+        - "LEADING:3"
+        - "TRAILING:3"
+        - "SLIDINGWINDOW:4:15"
+        - "MINLEN:36"
+        - "ILLUMINACLIP:workflow/meta/adapters/TruSeq3-PE.fa:2:30:10"

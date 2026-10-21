@@ -1,0 +1,7 @@
+sample	sex	fq1	fq2
+S01	M	/path/to/reads/S01_R1.fastq.gz	/path/to/reads/S01_R2.fastq.gz
+S02	M	/path/to/reads/S02_R1.fastq.gz	/path/to/reads/S02_R2.fastq.gz
+S03	M	/path/to/reads/S03_R1.fastq.gz	/path/to/reads/S03_R2.fastq.gz
+S04	F	/path/to/reads/S04_R1.fastq.gz	/path/to/reads/S04_R2.fastq.gz
+S05	F	/path/to/reads/S05_R1.fastq.gz	/path/to/reads/S05_R2.fastq.gz
+S06	F	/path/to/reads/S06_R1.fastq.gz	/path/to/reads/S06_R2.fastq.gz

@@ -1,0 +1,27 @@
+name: sex-region
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.11
+  - pandas
+  - numpy
+  - matplotlib
+  - scikit-learn
+  - fastp
+  - fastqc
+  - multiqc
+  - bwa
+  - samtools
+  - htslib
+  - bcftools
+  - bedtools
+  - freebayes
+  - gatk4
+  - kmc
+  - seqtk
+  - mummer4
+  - gnuplot
+  - r-base
+  - r-ggplot2
+  - r-dplyr

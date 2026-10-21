@@ -1,0 +1,26 @@
+# local config and data
+config/pipeline.env
+config/samples.tsv
+results/
+*.fastq.gz
+*.fq.gz
+*.bam
+*.bai
+*.vcf
+*.vcf.gz
+*.tbi
+*.csi
+*.fa
+*.fasta
+*.fai
+*.delta
+*.kmc_pre
+*.kmc_suf
+nohup.out
+*.log
+
+# python / R
+__pycache__/
+*.pyc
+.Rhistory
+.RData

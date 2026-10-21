@@ -1,0 +1,7 @@
+# reference.fa	query.fa	name
+/path/to/female_h1.fa	/path/to/female_h2.fa	F1_vs_F2
+/path/to/female_h1.fa	/path/to/male_h1.fa	F1_vs_M1
+/path/to/female_h1.fa	/path/to/male_h2.fa	F1_vs_M2
+/path/to/female_h2.fa	/path/to/male_h1.fa	F2_vs_M1
+/path/to/female_h2.fa	/path/to/male_h2.fa	F2_vs_M2
+/path/to/male_h1.fa	/path/to/male_h2.fa	M1_vs_M2
