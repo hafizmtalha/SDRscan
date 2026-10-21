@@ -6,7 +6,9 @@ SDRscan takes whole-genome sequencing reads from individuals of known sex and
 a reference genome, and reports which chromosome regions differ consistently
 between the sexes. It combines four independent lines of evidence, then tests
 each candidate region before you trust it. It works for any ploidy and any
-number of samples from 2 males + 2 females upwards.
+number of samples. A full analysis needs 2 males + 2 females or more, and a
+1 + 1 pilot mode gives a first look. It can also **assign sex** to samples of
+unknown sex, and flag mislabelled samples, once a sex-linked region is known.
 
 ---
 
@@ -18,7 +20,7 @@ SDRscan looks for that signal in four ways:
 
 | # | Line of evidence | What it measures | Signal of a sex-linked region |
 |---|---|---|---|
-| 1 | **Depth & heterozygosity** (via [findZX](https://github.com/hsigeman/findZX)) | read depth and heterozygosity per sex in windows | depth or heterozygosity differs between sexes |
+| 1 | **Depth & heterozygosity** ([findZX](https://github.com/hsigeman/findZX) and SDRscan's own ploidy-aware scan) | read depth and heterozygosity per sex in windows | depth or heterozygosity differs between sexes |
 | 2 | **Sex-specific SNP density** | SNPs whose ALT allele is carried by (almost) all of one sex and (almost) none of the other | windows enriched for such SNPs |
 | 3 | **Sex-specific k-mers** | 31-mers present in most of one sex and absent from every individual of the other, mapped back to the genome | windows enriched for such k-mers |
 | 4 | **Assembly comparison** | whole-genome / per-chromosome alignments between assemblies (e.g. male vs female, or two haplotypes) | structural differences on the candidate chromosome |
@@ -35,6 +37,14 @@ Candidate regions from (2) are then checked:
 
 **Male-biased signals point to XY, female-biased to ZW.** SDRscan runs both
 directions so the data decide.
+
+Two extra modes cover the ends of the sample-size range:
+
+- **Pilot (1 male + 1 female):** depth and heterozygosity only, clearly
+  labelled as unreplicated (see *Small studies* below).
+- **Sex assignment:** call the sex of unknown samples from known sex-linked
+  loci, and check that recorded sexes agree with the genomes (see *Assigning
+  sex to samples* below).
 
 ### What it does not do
 
@@ -54,7 +64,7 @@ directions so the data decide.
 | Input | Needed | Notes |
 |---|---|---|
 | Paired-end WGS reads (Illumina) | yes | one pair of FASTQ files per individual |
-| Sex of every individual | yes | phenotypic sex; the PCA can flag likely mis-sexed samples |
+| Sex of every individual | yes, or `U` | `M`/`F` for discovery; `U` (unknown) samples are excluded from comparisons and can be sexed by stage 13 |
 | Reference genome (FASTA) | yes | chromosome-level is best; scaffold-level works but plots are harder to read |
 | Ploidy | yes | set `PLOIDY` (2, 3, 4, 6, ...), per sample if populations are mixed |
 | Second assembly / haplotypes | optional | needed for assembly comparison and for mapping k-mers to the other sex's genome |
@@ -74,13 +84,15 @@ analyses need more:
 | Analysis | Minimum | Recommended | Why |
 |---|---|---|---|
 | QC, alignment, variant calling (stages 1–3) | 1 sample | — | per-sample steps |
-| findZX (stage 4) | 2 + 2 | ≥ 5 per sex | findZX itself runs with 1 + 1, but sex means from 1 individual are unreliable |
+| Depth & heterozygosity scan (stage 12) | 1 + 1 (pilot) | ≥ 3 per sex | with ≥ 2 per sex, windows must separate every male from every female |
+| findZX (stage 4) | 1 + 1 (pilot) | ≥ 5 per sex | sex means from 1 individual are unreliable |
 | Sex-specific SNP density (stage 5) | 2 + 2 | ≥ 5 per sex | with few samples, chance sharing of rare alleles looks "sex-specific" |
 | Sex-label permutation test (stage 6) | 2 + 2 | ≥ 4 per sex | the smallest possible p-value is 1 / C(n, n_focal), see below |
 | PCA (stage 6) | 2 + 2 | ≥ 6 in total | descriptive only with fewer |
 | Leave-one-out (stage 7) | 3 of the focal sex | ≥ 5 | dropping one must leave at least 2 |
 | Sex-specific k-mers (stage 8) | 2 + 2 | ≥ 5 per sex | "present in all but one" needs ≥ 2 of the focal sex |
 | Assembly comparison (stage 10) | — | — | uses assemblies, not samples |
+| Sex assignment (stage 13) | 1 sample + known sex-linked loci | ≥ 2 known-sex samples per sex | known-sex samples calibrate the scores; without them, theoretical expectations are used |
 
 **Smallest achievable p-value of the sex-label permutation test**, whatever
 the data:
@@ -98,8 +110,60 @@ SDRscan then still runs it, reports the floor, and warns. When the number of
 labellings is small it enumerates all of them (exact test); otherwise it
 samples `PERMUTATIONS` of them.
 
-Every run starts with a **sample-size report**: counts per sex, ploidy, the
-permutation p-value floor, and which analyses your design supports.
+Every run starts with a **sample-size report**: counts per sex (and unknown),
+ploidy, the permutation p-value floor, and which analyses your design
+supports. Stages the design cannot support are skipped with the reason.
+
+### Small studies: one male and one female (pilot)
+
+With a single individual of a sex there is no replication. Any difference
+could be a difference between those two individuals rather than between the
+sexes, and no statistical test is possible (a permutation test has 2
+labellings, so p ≥ 0.5). SDRscan therefore refuses sex comparisons unless you
+set `ALLOW_SINGLE_PER_SEX=1`, and then runs only the analyses that still say
+something:
+
+| Runs in a pilot | Why it still works |
+|---|---|
+| Depth scan (stage 12), findZX (stage 4) | a well-differentiated X/Z region shows half depth in the heterogametic sex, and sex-limited sequence shows a much larger drop. One individual is enough to see this. |
+| Heterozygosity scan (stage 12) | hemizygous regions lose heterozygosity; noisy with one individual |
+| Assembly comparison (stage 10) | does not use samples |
+
+| Skipped in a pilot | Why |
+|---|---|
+| SNP density, k-mers (5, 8, 9) | with n = 1, every private variant looks "sex-specific", millions of them genome-wide |
+| Permutation, PCA, leave-one-out (6, 7) | need replication |
+
+Pilot outputs are labelled `PILOT`. Use them to decide where to look and how
+many samples to sequence. They are not a result, and young sex chromosomes
+with a small SDR will usually not be visible at all.
+
+### Assigning sex to samples
+
+Mark samples of unknown sex as `U` in the sample sheet and run stage 13. It
+scores each sample on up to three kinds of evidence at known sex-linked loci:
+
+| Evidence | Uses | Male-like when (XY example) |
+|---|---|---|
+| depth | normalised depth over `SEXING_REGIONS` (default: `CANDIDATES`), from stage 12 | about half depth over X-like regions |
+| snp | genotypes at `SEXING_MARKERS` (default: the strict stage-5 sites) | carries male-specific ALT alleles |
+| kmer | share of the stage-8 male- and female-specific k-mer sets found in the sample | contains male-specific k-mers |
+
+- **Calibration:** scores are calibrated on the samples of known sex, so a
+  typical male ≈ +1 and a typical female ≈ −1. With no known-sex samples,
+  theoretical expectations are used; depth then needs `SEX_SYSTEM=XY|ZW`.
+- **Calls:** M or F with high, medium or low confidence, or *uncertain* when
+  the evidence is weak or conflicts.
+- **Checking recorded sexes:** samples of recorded sex are checked too, and
+  disagreements are flagged as `MISMATCH`.
+- **Circularity:** markers discovered from the same samples will separate them
+  trivially, so for known-sex samples depth is the independent check.
+- **Earlier markers:** point `SEXING_REGIONS`, `SEXING_MARKERS`,
+  `SEXING_MSK_DB` and `SEXING_FSK_DB` at an earlier project's results to sex
+  new samples of the same species without re-running discovery.
+- **No known locus yet:** sexing is not possible without one. Two unsexed
+  individuals cannot be told apart from genome data alone, because nothing
+  says which pattern belongs to which sex.
 
 ### Software
 
@@ -147,7 +211,7 @@ cp config/pairs.example.tsv    config/pairs.tsv      # assemblies to compare (op
 | column | content |
 |---|---|
 | `sample` | sample ID (used as the VCF sample name) |
-| `sex` | `M` or `F` |
+| `sex` | `M`, `F`, or `U` (unknown: excluded from comparisons, sexed by stage 13) |
 | `fq1`, `fq2` | paths to the read files |
 | `ploidy` | optional; overrides `PLOIDY` for this sample (`NA` = use `PLOIDY`) |
 
@@ -164,6 +228,9 @@ cp config/pairs.example.tsv    config/pairs.tsv      # assemblies to compare (op
 | `CANDIDATES`, `FOCAL_SEX` | regions to follow up (filled in after stage 5) and the sex to test |
 | `KMER_RUNS`, `KMER_REFS` | k-mer modes (`MSK`/`FSK` with `all-1`, a count or a fraction) and references to map to |
 | `CHROM_REGEX` | which sequences count as chromosomes in windows and plots |
+| `ALLOW_SINGLE_PER_SEX` | `1` allows a 1 male + 1 female pilot (stages 1–4, 10, 12) |
+| `DEPTH_WINDOW`, `DEPTH_LOG2_THRESHOLD`, `HET_DIFF_THRESHOLD` | depth/heterozygosity scan (stage 12) |
+| `SEX_SYSTEM`, `SEXING_*` | sex assignment (stage 13): system and known sex-linked loci |
 
 To test both XY and ZW properly, analyse against a female reference (look
 for male-specific signal) and a male reference (female-specific signal). Keep
@@ -211,12 +278,13 @@ strict, tens of thousands means noise. You can also run one set directly:
 ## Run
 
 ```bash
-./run_pipeline.sh            # stages 1-5
+./run_pipeline.sh            # stages 1-5 and 12
 #   -> look at results/05_snp_windows/*/sex_specific_snp_windows.png and
 #      merged_candidate_intervals.tsv, then set CANDIDATES in the config
 ./run_pipeline.sh 6 7        # test the candidates
 ./run_pipeline.sh 8 9 10 11  # k-mers, overlaps, assembly dotplots, figures
-./run_pipeline.sh all        # everything (6-7 only once CANDIDATES is set)
+./run_pipeline.sh all        # everything (6-7 once CANDIDATES is set, 13 if any sex is U)
+./run_pipeline.sh 13         # sex unknown samples / check recorded sexes
 ```
 
 Stages skip finished work, so after a failure fix the cause and run again.
@@ -235,6 +303,8 @@ Run long jobs in `tmux` or with `nohup`.
 | 9 | `09_compare_kmer_runs.sh` | overlap of k-mer candidates between runs | `09_kmer_overlap/` |
 | 10 | `10_nucmer_dotplots.sh` | nucmer alignments between assemblies | `10_dotplots/` |
 | 11 | `11_figures.sh` | Manhattan plots, dotplots, chromosome correspondence table | `11_figures/` |
+| 12 | `12_depth_het_scan.sh` | ploidy-aware depth & heterozygosity scan; the pilot analysis | `12_depth_het/` |
+| 13 | `13_assign_sex.sh` | assign sex to `U` samples, flag mislabelled samples | `13_sexing/` |
 
 **[docs/WORKFLOW.md](docs/WORKFLOW.md)** explains each step in the order the
 analysis was developed: the question it answers, the settings, what the
@@ -265,7 +335,8 @@ Every analysis step is also a standalone script (`--help` for options):
 `inspect_candidate_region.py`, `run_candidate_region_inspection.py`,
 `plot_candidate_chromosome.py`, `pca_from_gt_presence.py`,
 `permute_sex_labels.py`, `window_enrichment_permutation.py`,
-`plot_manhattan_windows.py`. `gtutils.py` is the shared genotype parser.
+`plot_manhattan_windows.py`, `depth_het_scan.py`, `assign_sex.py`.
+`gtutils.py` is the shared genotype parser.
 `findzx/make_units.py` writes findZX sample sheets (XY, ZW or `--shuffle`).
 
 ## Layout

@@ -31,6 +31,10 @@ def main():
     args = ap.parse_args()
 
     df = pd.read_csv(args.samples, sep="\t")
+    unknown = df[~df["sex"].isin(["M", "F"])]
+    if len(unknown):
+        print(f"Leaving out {len(unknown)} sample(s) of unknown sex: {', '.join(unknown['sample'])}")
+    df = df[df["sex"].isin(["M", "F"])].copy()
     sex = df["sex"].tolist()
     if args.shuffle:
         random.Random(args.seed).shuffle(sex)

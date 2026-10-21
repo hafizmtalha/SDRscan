@@ -20,7 +20,7 @@ if [ ! -f "$FINDZX_DIR/workflow/findZX" ]; then
   exit 1
 fi
 
-require_both_sexes
+require_both_sexes pilot_ok
 
 if [ "$(max_ploidy)" -gt 2 ]; then
   log "NOTE: PLOIDY > 2. findZX calls its own variants with Platypus, which assumes diploidy,"

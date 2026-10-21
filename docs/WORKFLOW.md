@@ -371,3 +371,30 @@ python bin/plot_manhattan_windows.py \
   false heterozygous calls.
 - **Size jobs for the server.** Several crashes and restarts came from
   launching too many threads or too many findZX runs at once.
+
+---
+
+## Added after the original analysis: pilot runs and sex assignment
+
+The original study always had several individuals of each sex. Two modes
+were added later so SDRscan is useful at both ends of the sample-size range.
+They were tested on simulated data, not on the original study.
+
+**Pilot (1 male + 1 female), `ALLOW_SINGLE_PER_SEX=1`.** Only analyses that
+make sense without replication run: findZX and the new depth/heterozygosity
+scan (stage 12). The scan normalises each sample's depth by its own genome
+median, reports log2(male/female) per window, and marks runs of windows with
+a strong shift. A well-differentiated X or Z shows about half depth in the
+heterogametic sex even in one individual. SNP density, k-mers and every test
+are skipped, because with one individual per sex every private variant looks
+sex-specific. Stage 12 also runs for larger designs, where it requires every
+male to differ from every female in a window. Unlike findZX's heterozygosity,
+it respects the declared ploidy.
+
+**Sex assignment (stage 13).** Once a sex-linked region or sex-specific
+markers are known, from this project or an earlier one, samples marked `U`
+can be sexed from depth over the region, genotypes at the marker SNPs and
+presence of sex-specific k-mers. Scores are calibrated on the known-sex
+samples. The same step re-checks every recorded sex and flags mismatches.
+This would have been useful in the original study, where possible mis-sexing
+was raised to explain weak signals.

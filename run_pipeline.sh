@@ -3,8 +3,9 @@
 # already exists, so it is safe to re-run after fixing a failure.
 #
 # Usage:
-#   ./run_pipeline.sh                    # stages 1-5 (everything that needs no decisions)
-#   ./run_pipeline.sh all                # 1-5 and 8-11; 6-7 also run if CANDIDATES is set
+#   ./run_pipeline.sh                    # stages 1-5 and 12 (everything that needs no decisions)
+#   ./run_pipeline.sh all                # 1-5, 8-12; 6-7 if CANDIDATES is set; 13 if any sex is "U"
+#   ./run_pipeline.sh 13                 # assign sex to unknown samples / check recorded sexes
 #   ./run_pipeline.sh 3 5 6              # only these stages
 #   CONFIG=config/male_ref.env ./run_pipeline.sh 1 2 3 5
 #
@@ -20,6 +21,11 @@
 #   9  k-mer run overlaps                  scripts/09_compare_kmer_runs.sh
 #   10 assembly dotplots (DOTPLOT_PAIRS)   scripts/10_nucmer_dotplots.sh
 #   11 summary figures                     scripts/11_figures.sh
+#   12 depth & heterozygosity scan         scripts/12_depth_het_scan.sh   (also the 1 + 1 pilot analysis)
+#   13 sex assignment / sex check          scripts/13_assign_sex.sh
+#
+# With fewer than 2 samples of a sex (pilot, ALLOW_SINGLE_PER_SEX=1) only
+# stages 1-4, 10 and 12 run; the others are skipped with an explanation.
 set -euo pipefail
 cd "$(dirname "$0")"
 S=scripts
@@ -28,14 +34,30 @@ source "$S/common.sh"
 sample_size_report
 STAGES=("$@")
 if [ ${#STAGES[@]} -eq 0 ]; then
-  STAGES=(1 2 3 4 5)
+  STAGES=(1 2 3 4 5 12)
 elif [ "${STAGES[0]}" = "all" ]; then
   STAGES=(1 2 3 4 5)
   [ ${#CANDIDATES[@]} -gt 0 ] && STAGES+=(6 7)
-  STAGES+=(8 9 10 11)
+  STAGES+=(8 9 10 11 12)
+  [ "$(n_of U)" -gt 0 ] && STAGES+=(13)
+fi
+
+# Which stages the design supports
+#   >= 2 per sex : all
+#   pilot (1 of a sex) : no stages 5-9, 11 (4 and 12 need ALLOW_SINGLE_PER_SEX=1)
+#   a sex missing : only stages that do not compare sexes (1-3, 10, 13)
+SKIP=""
+if [ "$(n_of M)" -lt 1 ] || [ "$(n_of F)" -lt 1 ]; then
+  SKIP=" 4 5 6 7 8 9 11 12 "; WHY="needs samples of both sexes"
+elif is_pilot; then
+  SKIP=" 5 6 7 8 9 11 "; WHY="needs >= $MIN_PER_SEX samples per sex (pilot design)"
 fi
 
 for stage in "${STAGES[@]}"; do
+  if [[ "$SKIP" == *" $stage "* ]]; then
+    log "===== Stage $stage skipped: $WHY ====="
+    continue
+  fi
   log "===== Stage $stage ====="
   case "$stage" in
     1) "$S/01_qc_align.sh" ;;
@@ -111,6 +133,8 @@ for stage in "${STAGES[@]}"; do
         CHROM_REGEX="$CHROM_REGEX" "$S/10_nucmer_dotplots.sh" "$DOTPLOT_PAIRS" "${OUTDIR}/10_dotplots"
       ;;
     11) "$S/11_figures.sh" ;;
+    12) "$S/12_depth_het_scan.sh" ;;
+    13) "$S/13_assign_sex.sh" ;;
     *) echo "Unknown stage: $stage" >&2; exit 1 ;;
   esac
 done
