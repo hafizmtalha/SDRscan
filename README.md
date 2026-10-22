@@ -705,6 +705,12 @@ repository" on GitHub) and the tools it runs: findZX (see
 `external/findZX/README.md`), BWA, freebayes, bcftools/htslib, bedtools, KMC,
 MUMmer, fastp and samtools.
 
+## License
+
+SDRscan is released under the [MIT License](LICENSE). findZX, included as a
+git submodule in `external/findZX`, is a separate project by its own authors
+and is not covered by this license; see its repository for its terms.
+
 **Keywords:** sex chromosome identification, how to identify sex
 chromosomes, sex-determining region, SDR, sex-linked region, XY vs ZW, sex
 determination system, sex-specific SNPs, sex-specific k-mers, sex-linked

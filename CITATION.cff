@@ -13,6 +13,7 @@ authors:
   - family-names: Malik
     given-names: Hafiz Muhammad Talha
 type: software
+license: MIT
 repository-code: "https://github.com/<user>/SDRscan"
 keywords:
   - sex chromosomes
