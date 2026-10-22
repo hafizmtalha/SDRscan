@@ -167,10 +167,70 @@ setup step 0.
 | simulated tetraploid, 6 + 6 + 2 unknown, 3.3 Mb, 20× | 4 threads, 7 GB RAM (laptop, WSL2) | ~31 min |
 | real plant genome (~500 Mb), 16 tetraploid samples | 48-core / 250 GB shared server | variant calling: hours to a day per sample; findZX: ~2 weeks on 16 cores |
 
-Memory: KMC uses `KMER_MEM_GB` (default 8 GB; the tests use 3). Other steps
-need a few GB; joint-calling memory grows with `MAX_PARALLEL_JOBS` and the
-number of samples.
 Disk: BAMs are about the size of the FASTQs; the k-mer databases are similar.
+Keep at least 3× the size of the compressed FASTQs free.
+
+### Memory (RAM)
+
+Running out of memory was the most common failure during development: a step
+is simply stopped by the operating system, often printing only `Killed` (exit
+code 137), or the whole machine becomes unresponsive. Check this before a long
+run.
+
+| Genome size | Minimum RAM | Recommended RAM | Settings at the minimum |
+|---|---|---|---|
+| test data (3.3 Mb) and genomes up to ~100 Mb | 8 GB | 16 GB | `THREADS=4 SORT_MEM=512M MAX_PARALLEL_JOBS=2 KMER_MEM_GB=3` |
+| ~100–600 Mb (many plants) | 16 GB | 32 GB | `THREADS=8 SORT_MEM=512M MAX_PARALLEL_JOBS=4 KMER_MEM_GB=8` |
+| ~0.6–1.5 Gb | 32 GB | 64 GB | `THREADS=16 SORT_MEM=1G MAX_PARALLEL_JOBS=6 KMER_MEM_GB=16` |
+| 1.5–3 Gb and larger | 64 GB | 128 GB | `THREADS=16 SORT_MEM=1G MAX_PARALLEL_JOBS=8 KMER_MEM_GB=32` |
+| findZX (stage 4), in addition | building its conda environments needs about 4–8 GB free | — | it failed to build on a laptop with 8 GB |
+
+"Minimum" means the RAM that is actually free for SDRscan, not the size of
+the machine: a browser, an IDE and other programs can easily take a quarter
+or more. The minimums are worked out from the per-step estimates below; the
+3.3 Mb tests were run with 7.8 GB. The number of samples affects the run time
+far more than the memory, because samples are aligned one after another.
+
+Where the memory goes. Steps run one after another, so the peak is the
+largest single line, not the sum:
+
+| Stage | Memory used | Controlled by |
+|---|---|---|
+| 1 alignment | BWA index (~1.5 × genome size) + `SORT_MEM` × `THREADS` for sorting | `SORT_MEM` is **per thread**: 4G × 16 threads asks for 64 GB |
+| 1 indexing (`bwa index`, once) | about 5 × genome size, briefly | — |
+| 2 variant calling | about 1–2 GB per freebayes job, more in deep or repetitive regions and with many samples | `MAX_PARALLEL_JOBS` |
+| 8 k-mers | `KMER_MEM_GB` + about 1 GB | `KMER_MEM_GB` (keep it below the free RAM) |
+| 10 assembly comparison | about 10 bytes per base of the larger assembly (~5 GB for 500 Mb) | `DOTPLOT_CHROMS` to compare main chromosomes only |
+| 4 findZX | its own settings; many parallel jobs | `FINDZX_CORES` |
+
+**SDRscan checks this for you.** Each run starts with a memory report that
+estimates these peaks from your settings and genome, compares them with the
+free RAM, and warns before a step is likely to be killed. For example, a
+500 Mb genome with `THREADS=16 SORT_MEM=4G` on an 8 GB laptop:
+
+```
+Memory: 7.6 GB total, 6.9 GB available; genome 500 Mb
+  estimated peaks: alignment 65.8 GB (stage 1), variant calling 4.5 GB (2),
+  k-mers 9.0 GB (8), assembly comparison 5.0 GB (10)
+  ! the largest estimate (65.8 GB) exceeds the available RAM: steps may be killed
+```
+
+The estimates are approximate. If a step is still killed, lower the setting
+in the "Controlled by" column for that stage and re-run it; finished work is
+kept.
+
+**Windows (WSL2):** by default WSL2 gets only half of the Windows RAM (a
+16 GB laptop gives Linux about 8 GB). To raise it, create
+`C:\Users\<you>\.wslconfig` containing
+
+```ini
+[wsl2]
+memory=12GB
+swap=8GB
+```
+
+then run `wsl --shutdown` in PowerShell and reopen Ubuntu. Leave Windows at
+least 3–4 GB. Check what Linux sees with `free -g`.
 
 ---
 
@@ -179,7 +239,8 @@ Disk: BAMs are about the size of the FASTQs; the k-mer databases are similar.
 **0. Windows only: install WSL2 and Ubuntu.** In PowerShell (as administrator)
 run `wsl --install -d Ubuntu-24.04`, restart, open "Ubuntu", and do every
 following step inside it. Keep data and the repository in the Linux home
-folder (`~`), not under `/mnt/c`, which is much slower.
+folder (`~`), not under `/mnt/c`, which is much slower. WSL2 gets only half
+of the computer's RAM by default; see "Memory (RAM)" to raise it.
 
 **1. Install conda** (skip if `conda --version` works). Miniforge is
 recommended:
@@ -241,8 +302,10 @@ PASS  stage 13: unknown samples sexed correctly  (U01: F (true F), U02: M (true 
 ```
 
 Results of the release tests: diploid 2 + 2 **30/30**, tetraploid 6 + 6 + 2
-unknown **33/33**, pilot 1 + 1 **14/14**. On a machine with little memory,
-lower the load with `THREADS=4 JOBS=2 KMER_MEM=3 tests/run_test.sh ...`.
+unknown **33/33**, pilot 1 + 1 **14/14**. The tests need about 6 GB of free
+RAM (8 GB machine). With less, or if a test step is `Killed`, lower the load
+with `THREADS=2 JOBS=1 KMER_MEM=2 tests/run_test.sh ...` and close other
+programs.
 
 Results of the tests run before release are in
 [docs/VALIDATION.md](docs/VALIDATION.md). Use `tests/simulate_dataset.py` on
@@ -286,8 +349,8 @@ Every setting is commented in the file. The main ones:
 | `REF` | reference FASTA | — |
 | `OUTDIR` | output folder | `results` |
 | `PLOIDY` | **required**: 2, 3, 4, 6, ... | none |
-| `THREADS`, `SORT_MEM` | threads and sort memory per job | 16, 4G |
-| `MAX_PARALLEL_JOBS`, `CALL_CHUNK_BP` | joint calling: freebayes jobs at a time, genome chunk size (bp) | 4, 1000000 |
+| `THREADS`, `SORT_MEM` | threads; samtools sort memory **per thread** (total = `SORT_MEM` × `THREADS`); see "Memory (RAM)" | 16, 1G |
+| `MAX_PARALLEL_JOBS`, `CALL_CHUNK_BP` | joint calling: freebayes jobs at a time (about 1–2 GB each), genome chunk size (bp) | 4, 1000000 |
 | `MARK_DUPLICATES` | 1 = GATK MarkDuplicatesSpark | 0 |
 | `MIN_MAPQ`, `MIN_BASEQ`, `MIN_ALT_COUNT` | freebayes filters | 20, 20, 4 |
 | `MIN_QUAL`, `MIN_DP` | merged VCF filters | 30, 5 |
@@ -573,6 +636,9 @@ candidates, small-sample handling and sexing of unknown samples.
 | `fastqc: unknown option -o` or similar | an old copy of SDRscan; FastQC ≥ 0.13 needs `--outdir`, which current SDRscan uses |
 | `conda env create` takes very long | use Miniforge (conda-forge only) rather than Anaconda's `defaults` channel, or `mamba env create -f environment.yml` |
 | KMC fails or is killed | lower `KMER_MEM_GB` below the free RAM, or use a disk with more space for `tmp/` |
+| a step prints `Killed`, exits with code 137, or the log stops without an error | out of memory: see the memory report at the start of the run and "Memory (RAM)"; lower `THREADS`/`SORT_MEM` (stage 1), `MAX_PARALLEL_JOBS` (stage 2) or `KMER_MEM_GB` (stage 8), close other programs, and re-run the stage |
+| `samtools sort: couldn't allocate memory` or `[bam_sort_core] ... failed` | `SORT_MEM` is per thread; `SORT_MEM` × `THREADS` must fit in the free RAM |
+| on Windows, Linux shows much less RAM than the computer has | WSL2 gets half of it by default; raise `memory=` in `.wslconfig` (see "Memory (RAM)") |
 | far too many or too few sex-specific SNPs | change `SNP_RUNS` thresholds; check `classifier.log` |
 | findZX fails while building environments | keep `FINDZX_CONDA_PREFIX` on a local disk and re-run; findZX resumes |
 | findZX plots show fewer samples than expected | check `04_findzx/<run>/units.tsv`; it is rebuilt from the sample sheet each run |

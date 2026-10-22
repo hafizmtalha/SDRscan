@@ -32,6 +32,7 @@ S=scripts
 source "$S/common.sh"
 
 sample_size_report
+memory_report
 STAGES=("$@")
 if [ ${#STAGES[@]} -eq 0 ]; then
   STAGES=(1 2 3 4 5 12)

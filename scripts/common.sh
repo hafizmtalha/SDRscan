@@ -131,6 +131,51 @@ sample_size_report() {
   return 0
 }
 
+# ---- Memory ----
+# Rough peak RAM (GB) of the heaviest steps with the current settings, and a
+# warning when the largest exceeds the RAM available. These are estimates
+# from the settings and genome size, not measurements; see README, "Memory".
+_size_gb() {   # "4G", "768M", "512K" or bytes -> GB
+  awk -v s="$1" 'BEGIN{u=toupper(substr(s,length(s))); v=s+0
+    if (u=="G") v*=1; else if (u=="M") v/=1024; else if (u=="K") v/=1048576; else v/=1073741824
+    printf "%.2f", v}'
+}
+memory_report() {
+  local genome avail total align call kmer nuc peak
+  if [ -s "${REF}.fai" ]; then
+    genome=$(awk '{s+=$2} END{printf "%.4f", s/1e9}' "${REF}.fai")
+  elif [ -f "$REF" ]; then
+    genome=$(awk -v b="$(wc -c < "$REF")" 'BEGIN{printf "%.4f", b/1e9}')
+  else
+    log "Memory: reference $REF not found, cannot estimate memory"; return 0
+  fi
+  if [ -r /proc/meminfo ]; then
+    total=$(awk '/^MemTotal/{printf "%.1f", $2/1048576}' /proc/meminfo)
+    avail=$(awk '/^MemAvailable/{printf "%.1f", $2/1048576}' /proc/meminfo)
+  else   # macOS
+    total=$(awk -v b="$(sysctl -n hw.memsize 2>/dev/null || echo 0)" 'BEGIN{printf "%.1f", b/1073741824}')
+    avail=$total
+  fi
+  # bwa mem holds the index (~1.5 x genome) next to samtools sort (SORT_MEM per thread)
+  align=$(awk -v g="$genome" -v m="$(_size_gb "${SORT_MEM:-768M}")" -v t="${THREADS:-1}" \
+    'BEGIN{printf "%.1f", 1.5*g + 1 + m*t}')
+  # freebayes: about 1.5 GB per chunk job, more in deep or repetitive regions
+  call=$(awk -v j="${MAX_PARALLEL_JOBS:-2}" 'BEGIN{printf "%.1f", 1.5*j}')
+  kmer=$(awk -v k="${KMER_MEM_GB:-8}" 'BEGIN{printf "%.1f", k+1}')
+  # nucmer: roughly 10 bytes per base of the larger assembly
+  nuc=$(awk -v g="$genome" 'BEGIN{printf "%.1f", 10*g}')
+  peak=$(printf '%s\n' "$align" "$call" "$kmer" "$nuc" | sort -g | tail -1)
+  log "Memory: ${total} GB total, ${avail} GB available; genome $(awk -v g="$genome" 'BEGIN{printf "%.0f", g*1000}') Mb"
+  log "  estimated peaks: alignment ${align} GB (stage 1), variant calling ${call} GB (2),"
+  log "  k-mers ${kmer} GB (8), assembly comparison ${nuc} GB (10)"
+  if awk -v p="$peak" -v a="$avail" 'BEGIN{exit !(p > a)}'; then
+    log "  ! the largest estimate (${peak} GB) exceeds the available RAM: steps may be killed"
+    log "    (\"Killed\", exit code 137). Lower THREADS, SORT_MEM, MAX_PARALLEL_JOBS or KMER_MEM_GB,"
+    log "    close other programs, or on WSL2 raise the memory limit (README, \"Memory\")"
+  fi
+  return 0
+}
+
 # Resolve a "how many samples" setting: a count (7), a fraction (0.8),
 # "all", "all-N", or "auto" (all-1 with >= 4 samples, otherwise all),
 # against n samples. Result is clamped to 1..n.
