@@ -63,6 +63,7 @@ for entry in "${RUNS[@]}"; do
       -e "s#^ref_genome:.*#ref_genome: ${FREF}#" \
       -e "s#^chr_file:.*#chr_file: ${CHR_FILE}#" \
       -e "s#^threads_max:.*#threads_max: ${FINDZX_CORES}#" \
+      -e "s#^mem_max:.*#mem_max: ${FINDZX_MEM_MB:-8000}#" \
       -e "s#^window_sizes:.*#window_sizes: ${FINDZX_WINDOWS}#" \
       "$PIPELINE_DIR/findzx/config.example.yml" > "$d/config.yml"
 

@@ -163,35 +163,33 @@ setup step 0.
 
 | Dataset | Hardware | Time |
 |---|---|---|
-| simulated diploid, 2 + 2, 3.3 Mb genome, 15× | 4 threads, 7 GB RAM (laptop, WSL2) | 6 min |
-| simulated tetraploid, 6 + 6 + 2 unknown, 3.3 Mb, 20× | 4 threads, 7 GB RAM (laptop, WSL2) | ~31 min |
-| real plant genome (~500 Mb), 16 tetraploid samples | 48-core / 250 GB shared server | variant calling: hours to a day per sample; findZX: ~2 weeks on 16 cores |
+| simulated diploid, 2 + 2, 3.3 Mb genome, 15× | 4 threads, 8 GB RAM | 6 min |
+| simulated tetraploid, 6 + 6 + 2 unknown, 3.3 Mb, 20× | 4 threads, 8 GB RAM | ~31 min |
+| plant genome (~500 Mb), 16 tetraploid samples | 48-core / 250 GB server | variant calling: hours to a day per sample; findZX: ~2 weeks on 16 cores |
 
 Disk: BAMs are about the size of the FASTQs; the k-mer databases are similar.
 Keep at least 3× the size of the compressed FASTQs free.
 
 ### Memory (RAM)
 
-Running out of memory was the most common failure during development: a step
-is simply stopped by the operating system, often printing only `Killed` (exit
-code 137), or the whole machine becomes unresponsive. Check this before a long
-run.
+When a step needs more memory than is free, the operating system stops it,
+often printing only `Killed` (exit code 137), or the machine becomes
+unresponsive. Choose settings that fit your machine before a long run.
 
 | Genome size | Minimum RAM | Recommended RAM | Settings at the minimum |
 |---|---|---|---|
-| test data (3.3 Mb) and genomes up to ~100 Mb | 8 GB | 16 GB | `THREADS=4 SORT_MEM=512M MAX_PARALLEL_JOBS=2 KMER_MEM_GB=3` |
+| up to ~100 Mb (includes the test data) | 8 GB | 16 GB | `THREADS=4 SORT_MEM=512M MAX_PARALLEL_JOBS=2 KMER_MEM_GB=3` |
 | ~100–600 Mb (many plants) | 16 GB | 32 GB | `THREADS=8 SORT_MEM=512M MAX_PARALLEL_JOBS=4 KMER_MEM_GB=8` |
 | ~0.6–1.5 Gb | 32 GB | 64 GB | `THREADS=16 SORT_MEM=1G MAX_PARALLEL_JOBS=6 KMER_MEM_GB=16` |
 | 1.5–3 Gb and larger | 64 GB | 128 GB | `THREADS=16 SORT_MEM=1G MAX_PARALLEL_JOBS=8 KMER_MEM_GB=32` |
-| findZX (stage 4), in addition | building its conda environments needs about 4–8 GB free | — | it failed to build on a laptop with 8 GB |
 
-"Minimum" means the RAM that is actually free for SDRscan, not the size of
-the machine: a browser, an IDE and other programs can easily take a quarter
-or more. The minimums are worked out from the per-step estimates below; the
-3.3 Mb tests were run with 7.8 GB. The number of samples affects the run time
-far more than the memory, because samples are aligned one after another.
+These cover every stage except findZX (stage 4), which has its own
+requirements (next section). "Minimum" means RAM free for SDRscan, not the
+size of the machine; other programs and users take their share. The values
+follow from the per-stage figures below. The number of samples affects run
+time far more than memory, because samples are aligned one after another.
 
-Where the memory goes. Steps run one after another, so the peak is the
+Where the memory goes. Stages run one after another, so the peak is the
 largest single line, not the sum:
 
 | Stage | Memory used | Controlled by |
@@ -201,12 +199,11 @@ largest single line, not the sum:
 | 2 variant calling | about 1–2 GB per freebayes job, more in deep or repetitive regions and with many samples | `MAX_PARALLEL_JOBS` |
 | 8 k-mers | `KMER_MEM_GB` + about 1 GB | `KMER_MEM_GB` (keep it below the free RAM) |
 | 10 assembly comparison | about 10 bytes per base of the larger assembly (~5 GB for 500 Mb) | `DOTPLOT_CHROMS` to compare main chromosomes only |
-| 4 findZX | its own settings; many parallel jobs | `FINDZX_CORES` |
 
 **SDRscan checks this for you.** Each run starts with a memory report that
 estimates these peaks from your settings and genome, compares them with the
-free RAM, and warns before a step is likely to be killed. For example, a
-500 Mb genome with `THREADS=16 SORT_MEM=4G` on an 8 GB laptop:
+free RAM, and warns before a stage is likely to be killed. For example, a
+500 Mb genome with `THREADS=16 SORT_MEM=4G` on a machine with 8 GB:
 
 ```
 Memory: 7.6 GB total, 6.9 GB available; genome 500 Mb
@@ -215,22 +212,38 @@ Memory: 7.6 GB total, 6.9 GB available; genome 500 Mb
   ! the largest estimate (65.8 GB) exceeds the available RAM: steps may be killed
 ```
 
-The estimates are approximate. If a step is still killed, lower the setting
+The estimates are approximate. If a stage is still killed, lower the setting
 in the "Controlled by" column for that stage and re-run it; finished work is
 kept.
 
-**Windows (WSL2):** by default WSL2 gets only half of the Windows RAM (a
-16 GB laptop gives Linux about 8 GB). To raise it, create
-`C:\Users\<you>\.wslconfig` containing
+**Windows (WSL2):** WSL2 gets half of the Windows RAM by default. To give it
+more, create `C:\Users\<you>\.wslconfig` containing
 
 ```ini
 [wsl2]
-memory=12GB
+memory=24GB
 swap=8GB
 ```
 
-then run `wsl --shutdown` in PowerShell and reopen Ubuntu. Leave Windows at
-least 3–4 GB. Check what Linux sees with `free -g`.
+(set `memory` to what you need, leaving Windows at least 4 GB), run
+`wsl --shutdown` in PowerShell and reopen Ubuntu. `free -g` shows what Linux
+sees.
+
+### findZX (stage 4) requirements
+
+findZX is a separate Snakemake workflow with its own software and resources.
+It is optional: every other stage runs without it.
+
+| | Requirement |
+|---|---|
+| RAM | at least 16 GB; 32 GB or more recommended for genomes over ~500 Mb. Each run uses up to `FINDZX_MEM_MB` for alignment and sorting, plus its own variant calling |
+| parallel runs | the XY, ZW and shuffled-sex runs (`FINDZX_RUNS`) start **at the same time** when `FINDZX_BACKGROUND=1`, so they need 3 × the memory and 3 × `FINDZX_CORES` cores. On a smaller machine set `FINDZX_BACKGROUND=0` to run them one after another |
+| CPU | `FINDZX_CORES` per run (default 16) |
+| disk | findZX aligns the reads again itself: plan for about the disk space of stage 1 again, plus several GB for its conda environments (`FINDZX_CONDA_PREFIX`) |
+| software | its own conda environment (`external/findZX/environment.yml`); on the first run it builds about 15 more environments, which needs time, internet access and a few GB of free RAM |
+| time | days to weeks on real genomes (~2 weeks for 16 samples of a 500 Mb genome on 16 cores) |
+| ploidy | assumes diploidy; at other ploidies its heterozygosity is approximate (its depth results are still valid) |
+| clusters | findZX's reference-indexing rule requests 369 GB (`mem_mb=369000` in `external/findZX/workflow/rules/ref.smk`); on a cluster that enforces memory requests, override it (e.g. `--set-resources bwa_index:mem_mb=16000`) |
 
 ---
 
@@ -239,8 +252,8 @@ least 3–4 GB. Check what Linux sees with `free -g`.
 **0. Windows only: install WSL2 and Ubuntu.** In PowerShell (as administrator)
 run `wsl --install -d Ubuntu-24.04`, restart, open "Ubuntu", and do every
 following step inside it. Keep data and the repository in the Linux home
-folder (`~`), not under `/mnt/c`, which is much slower. WSL2 gets only half
-of the computer's RAM by default; see "Memory (RAM)" to raise it.
+folder (`~`), not under `/mnt/c`, which is much slower. WSL2 gets half of
+the computer's RAM by default; see "Memory (RAM)" to change it.
 
 **1. Install conda** (skip if `conda --version` works). Miniforge is
 recommended:
@@ -303,9 +316,8 @@ PASS  stage 13: unknown samples sexed correctly  (U01: F (true F), U02: M (true 
 
 Results of the release tests: diploid 2 + 2 **30/30**, tetraploid 6 + 6 + 2
 unknown **33/33**, pilot 1 + 1 **14/14**. The tests need about 6 GB of free
-RAM (8 GB machine). With less, or if a test step is `Killed`, lower the load
-with `THREADS=2 JOBS=1 KMER_MEM=2 tests/run_test.sh ...` and close other
-programs.
+RAM; with less, lower the load with
+`THREADS=2 JOBS=1 KMER_MEM=2 tests/run_test.sh ...`.
 
 Results of the tests run before release are in
 [docs/VALIDATION.md](docs/VALIDATION.md). Use `tests/simulate_dataset.py` on
@@ -357,7 +369,7 @@ Every setting is commented in the file. The main ones:
 | `CHROM_REGEX` | which sequences are chromosomes (others are ignored in windows and plots) | `chr_?[0-9]+$` |
 | `ALLOW_SINGLE_PER_SEX` | 1 = allow a 1 male + 1 female pilot | 0 |
 | `FINDZX_RUNS` | findZX runs `SYSTEM\|reference` with SYSTEM = `XY`, `ZW` or `SHUFFLED` | XY, ZW, shuffled |
-| `FINDZX_CONDA_ENV`, `FINDZX_BACKGROUND`, `FINDZX_CORES` | findZX environment and resources | `findZX`, 1, 16 |
+| `FINDZX_CONDA_ENV`, `FINDZX_BACKGROUND`, `FINDZX_CORES`, `FINDZX_MEM_MB` | findZX environment and resources (`FINDZX_BACKGROUND=1`: runs in parallel, in the background); see "findZX (stage 4) requirements" | `findZX`, 1, 16, 8000 |
 | `WINDOW`, `STEP` | SNP-density windows (bp) | 100000, 50000 |
 | `SNP_RUNS` | named threshold sets `name\|classifier options` | relaxed, strict |
 | `RELAXED_RUN`, `STRICT_RUN` | which runs find and validate candidates | relaxed, strict |
@@ -638,9 +650,10 @@ candidates, small-sample handling and sexing of unknown samples.
 | KMC fails or is killed | lower `KMER_MEM_GB` below the free RAM, or use a disk with more space for `tmp/` |
 | a step prints `Killed`, exits with code 137, or the log stops without an error | out of memory: see the memory report at the start of the run and "Memory (RAM)"; lower `THREADS`/`SORT_MEM` (stage 1), `MAX_PARALLEL_JOBS` (stage 2) or `KMER_MEM_GB` (stage 8), close other programs, and re-run the stage |
 | `samtools sort: couldn't allocate memory` or `[bam_sort_core] ... failed` | `SORT_MEM` is per thread; `SORT_MEM` × `THREADS` must fit in the free RAM |
-| on Windows, Linux shows much less RAM than the computer has | WSL2 gets half of it by default; raise `memory=` in `.wslconfig` (see "Memory (RAM)") |
+| on Windows, Linux shows much less RAM than the computer has | WSL2 gets half of it by default; set `memory=` in `.wslconfig` (see "Memory (RAM)") |
 | far too many or too few sex-specific SNPs | change `SNP_RUNS` thresholds; check `classifier.log` |
-| findZX fails while building environments | keep `FINDZX_CONDA_PREFIX` on a local disk and re-run; findZX resumes |
+| findZX fails while building environments | keep `FINDZX_CONDA_PREFIX` on a local disk with several GB free, check internet access and free RAM, and re-run; findZX resumes |
+| findZX runs are killed or the machine slows down | with `FINDZX_BACKGROUND=1` the three findZX runs run at the same time; set it to 0, or lower `FINDZX_CORES` and `FINDZX_MEM_MB` (see "findZX (stage 4) requirements") |
 | findZX plots show fewer samples than expected | check `04_findzx/<run>/units.tsv`; it is rebuilt from the sample sheet each run |
 | a shared server becomes slow or unresponsive | lower `THREADS`, `MAX_PARALLEL_JOBS` and `FINDZX_CORES` |
 | the job stops when you log out | run inside `tmux`/`screen` or with `nohup` |

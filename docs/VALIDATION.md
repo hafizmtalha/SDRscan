@@ -34,8 +34,8 @@ written, and the female reference is used for read mapping.
 
 ## Results
 
-Run on a laptop under WSL2 (Ubuntu 24.04), 4 threads, 7 GB RAM, with the
-settings written by `tests/run_test.sh`. Every stage except findZX (stage 4)
+Run on Linux (Ubuntu 24.04), 4 threads, 8 GB RAM, with the settings written
+by `tests/run_test.sh`. Every stage except findZX (stage 4)
 was run.
 
 | Test | Design | Checks | Run time |
@@ -122,9 +122,10 @@ before release:
 
 ## Not covered by these tests
 
-- **findZX (stage 4)** was not run in these tests: building its environments
-  needs more memory and time than the test machine allowed. Run
-  `RUN_FINDZX=1 tests/run_test.sh with_findzx 2 3 3` to include it.
+- **findZX (stage 4)** is not part of these tests; it is a separately
+  published workflow with its own requirements (README, "findZX (stage 4)
+  requirements"). Run `RUN_FINDZX=1 tests/run_test.sh with_findzx 2 3 3` to
+  include it.
 - **ZW systems** were not simulated. The code paths are symmetric (female
   reference for XY, male reference for ZW, `FOCAL_SEX=F`), but only XY was
   tested.
