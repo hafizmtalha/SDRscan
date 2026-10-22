@@ -267,7 +267,7 @@ bash Miniforge3-$(uname)-$(uname -m).sh -b -p ~/miniforge3
 **2. Get SDRscan with its findZX submodule.**
 
 ```bash
-git clone --recurse-submodules https://github.com/<user>/SDRscan.git
+git clone --recurse-submodules https://github.com/hafizmtalha/SDRscan.git
 cd SDRscan
 # if you cloned without --recurse-submodules:
 git submodule update --init

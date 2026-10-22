@@ -14,7 +14,7 @@ authors:
     given-names: Hafiz Muhammad Talha
 type: software
 license: MIT
-repository-code: "https://github.com/<user>/SDRscan"
+repository-code: "https://github.com/hafizmtalha/SDRscan"
 keywords:
   - sex chromosomes
   - sex chromosome identification
