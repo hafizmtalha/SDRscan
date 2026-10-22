@@ -33,8 +33,8 @@ for S in "${SAMPLE_LIST[@]}"; do
     --thread "$THREADS" 2> "$OUT/logs/${S}.fastp.log"
 
   log "$S: FastQC"
-  fastqc -q -t 2 -o "$OUT/fastqc_raw" "$R1" "$R2"
-  fastqc -q -t 2 -o "$OUT/fastqc_clean" "$OUT/fastp/${S}_clean_R1.fastq.gz" "$OUT/fastp/${S}_clean_R2.fastq.gz"
+  fastqc --quiet --threads 2 --outdir "$OUT/fastqc_raw" "$R1" "$R2"
+  fastqc --quiet --threads 2 --outdir "$OUT/fastqc_clean" "$OUT/fastp/${S}_clean_R1.fastq.gz" "$OUT/fastp/${S}_clean_R2.fastq.gz"
 
   log "$S: bwa mem + sort"
   bwa mem -t "$THREADS" "$REF" "$OUT/fastp/${S}_clean_R1.fastq.gz" "$OUT/fastp/${S}_clean_R2.fastq.gz" \

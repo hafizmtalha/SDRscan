@@ -12,7 +12,8 @@ and both sexes have at least MIN_CALLED_* called genotypes.
 
 Thresholds are counts (7) or fractions of that sex's sample size (0.8 = 80%,
 rounded up), so the same settings carry over between studies of different
-sizes. --max-alt-opposite is a count or a fraction of the opposite sex.
+sizes. --max-alt-opposite is a count or a fraction of the opposite sex
+(rounded down).
 
 Ploidy must be declared with --ploidy N or --sample-ploidy FILE
 (sample<TAB>ploidy, for mixed-ploidy populations). Genotypes with a different
@@ -87,8 +88,8 @@ def main():
     min_called_f = threshold(args.min_called_females, nf)
     min_alt_m = threshold(args.min_alt_males, nm)
     min_alt_f = threshold(args.min_alt_females, nf)
-    max_opp_in_f = threshold(args.max_alt_opposite, nf)   # females allowed at male-specific sites
-    max_opp_in_m = threshold(args.max_alt_opposite, nm)   # males allowed at female-specific sites
+    max_opp_in_f = threshold(args.max_alt_opposite, nf, maximum=True)   # females allowed at male-specific sites
+    max_opp_in_m = threshold(args.max_alt_opposite, nm, maximum=True)   # males allowed at female-specific sites
     ploidies = sorted(set(ploidy.values()))
     alt_rule = (f"dosage in {sorted(dosages)}" if dosages else f"dosage >= {args.min_alt_dosage}")
     print(f"Samples: {nm} males, {nf} females; ploidy {ploidies}; ALT-present = {alt_rule}")

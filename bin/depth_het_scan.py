@@ -57,6 +57,9 @@ def main():
                     help="min |het(M) - het(F)| for a heterozygosity candidate window")
     ap.add_argument("--min-depth", type=float, default=0.05,
                     help="ignore windows whose median normalised depth across samples is below this")
+    ap.add_argument("--strong-windows", type=int, default=3,
+                    help="candidates spanning at least this many adjacent windows are marked 'strong', "
+                         "shorter ones 'weak' (column support)")
     ap.add_argument("--outprefix", default="depth_het")
     args = ap.parse_args()
 
@@ -154,6 +157,9 @@ def main():
                 rows.append(_summarise(kind, col, run))
     cand = pd.DataFrame(rows, columns=["evidence", "CHROM", "START", "END", "n_windows", "mean_effect", "interpretation"])
     cand = cand.sort_values(["n_windows", "mean_effect"], ascending=[False, False], key=lambda s: s.abs())
+    # Single windows cross the thresholds by chance, especially in pilots;
+    # a run of several adjacent windows is the pattern a sex-linked region gives
+    cand["support"] = np.where(cand["n_windows"] >= args.strong_windows, "strong", "weak")
     cand.to_csv(f"{args.outprefix}.candidates.tsv", sep="\t", index=False, float_format="%.4g")
 
     agg = {"log2_MF": "median"}

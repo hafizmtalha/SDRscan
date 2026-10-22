@@ -9,19 +9,22 @@ Evidence (use any combination; at least one is required):
           BED + --depth table from depth_het_scan.py). With a female (XX/ZW-W
           free) reference, X/Z-like regions show half depth in the heterogametic
           sex.
-  snp     share of known male-specific SNPs (--markers, from
-          classify_sex_specific_snps.py) where the sample carries ALT, minus the
-          share of known female-specific SNPs where it does.
-  kmer    share of male-specific k-mers the sample contains minus the share of
-          female-specific k-mers (--kmer-fractions: sample, msk_fraction,
-          fsk_fraction).
+  snp     (male-specific marker SNPs where the sample carries ALT - female-
+          specific ones where it does) / marker SNPs called in the sample
+          (--markers, from classify_sex_specific_snps.py).
+  kmer    (male-specific k-mers the sample contains - female-specific ones) /
+          all sex-specific k-mers (--kmer-fractions: sample, msk_found,
+          msk_total, fsk_found, fsk_total; or msk_fraction, fsk_fraction).
+  Every marker counts once, so a few chance markers of one class cannot
+  outweigh many real markers of the other.
 
 Each evidence becomes a score where positive = male-like and negative =
 female-like, scaled so that +1 / -1 is the typical value of a male / female:
   - if the sample sheet has samples of known sex (M/F) with data, the scale is
     calibrated on them (midpoint between the two sex means = 0);
   - otherwise theoretical expectations are used (depth: heterogametic 0.5 vs
-    homogametic 1.0, which needs --system; snp/kmer: 0 = no preference).
+    homogametic 1.0 for diploids, (P-1)/P vs 1.0 at ploidy P, which needs
+    --system; snp/kmer: 0 = no preference).
 
 The combined score is the mean of the available evidence scores. Calls:
   M / F       |combined| >= --call-threshold and no evidence disagrees strongly
@@ -81,18 +84,25 @@ def snp_values(markers_file, genotypes, vcf_samples_file, ploidy_args):
     n_f = (markers["CLASS"] == "female_specific").sum()
     print(f"snp: {n_m} male-specific and {n_f} female-specific marker sites")
 
-    def frac(a):
-        return a[0] / a[1] if a[1] else np.nan
+    # Every marker counts once: (male-specific ALT carried - female-specific ALT
+    # carried) / markers called. Averaging the two shares instead would let a
+    # handful of chance sites of one class outweigh thousands of the other.
     vals = {}
     for s, h in hits.items():
-        fm, ff = frac(h["male_specific"]), frac(h["female_specific"])
-        vals[s] = np.nansum([fm, -ff]) if not (np.isnan(fm) and np.isnan(ff)) else np.nan
+        (am, cm), (af, cf) = h["male_specific"], h["female_specific"]
+        vals[s] = (am - af) / (cm + cf) if cm + cf else np.nan
     return pd.Series(vals)
 
 
 def kmer_values(path):
     k = pd.read_csv(path, sep="\t")
-    return pd.Series((k["msk_fraction"].fillna(0) - k["fsk_fraction"].fillna(0)).values, index=k["sample"])
+    if {"msk_found", "msk_total", "fsk_found", "fsk_total"} <= set(k.columns):
+        # every k-mer counts once, as for SNP markers
+        total = k["msk_total"] + k["fsk_total"]
+        v = (k["msk_found"] - k["fsk_found"]) / total.where(total > 0)
+    else:   # older tables with fractions only
+        v = k["msk_fraction"].fillna(0) - k["fsk_fraction"].fillna(0)
+    return pd.Series(v.values, index=k["sample"])
 
 
 def to_score(values, known, default_mid, default_half, default_sign):
@@ -123,7 +133,7 @@ def main():
     ap.add_argument("--vcf-samples")
     ap.add_argument("--ploidy", type=int)
     ap.add_argument("--sample-ploidy")
-    ap.add_argument("--kmer-fractions", help="TSV: sample, msk_fraction, fsk_fraction")
+    ap.add_argument("--kmer-fractions", help="TSV: sample, msk_found, msk_total, fsk_found, fsk_total (or msk_fraction, fsk_fraction)")
     ap.add_argument("--call-threshold", type=float, default=0.5)
     ap.add_argument("--outprefix", default="sex_assignment")
     args = ap.parse_args()
@@ -135,8 +145,13 @@ def main():
     evidence, notes = {}, []
     if args.depth and args.regions:
         sign = None if args.system is None else (-1 if args.system == "XY" else 1)
+        # one of P copies missing in the heterogametic sex: depth (P-1)/P vs 1
+        p = args.ploidy
+        if p is None and args.sample_ploidy:
+            p = max(int(l.split()[1]) for l in open(args.sample_ploidy) if l.strip())
+        hetero = (p - 1) / p if p else 0.5
         s, how = to_score(depth_values(args.depth, args.regions), known,
-                          0.75 if sign else None, 0.25, sign)
+                          (1 + hetero) / 2 if sign else None, (1 - hetero) / 2, sign)
         notes.append(f"depth: {how}")
         if s is not None:
             evidence["depth"] = s

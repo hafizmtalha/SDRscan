@@ -35,7 +35,7 @@ colnames(coords)[1:13] <- c("ref_start", "ref_end", "qry_start", "qry_end",
 
 d <- coords %>%
   filter(chr_ref == ref_chrom, chr_qry == qry_chrom, len_ref >= min_len) %>%
-  mutate(orientation = ifelse((ref_end - ref_start) * (qry_end - qry_start) > 0, "Forward", "Reverse"),
+  mutate(orientation = ifelse(sign(ref_end - ref_start) == sign(qry_end - qry_start), "Forward", "Reverse"),
          x = (ref_start + ref_end) / 2 / 1e6,
          y = (qry_start + qry_end) / 2 / 1e6)
 if (nrow(d) == 0) stop("No alignments between ", ref_chrom, " and ", qry_chrom)

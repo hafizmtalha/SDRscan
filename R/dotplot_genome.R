@@ -56,7 +56,7 @@ qry_axis <- axis_table(coords$chr_qry, coords$chr_len_qry)
 coords <- coords %>%
   left_join(ref_axis %>% select(chr_ref = chr, ref_off = offset), by = "chr_ref") %>%
   left_join(qry_axis %>% select(chr_qry = chr, qry_off = offset), by = "chr_qry") %>%
-  mutate(orientation = ifelse((ref_end - ref_start) * (qry_end - qry_start) > 0, "Forward", "Reverse"),
+  mutate(orientation = ifelse(sign(ref_end - ref_start) == sign(qry_end - qry_start), "Forward", "Reverse"),
          x = (ref_start + ref_end) / 2 + ref_off,
          y = (qry_start + qry_end) / 2 + qry_off)
 

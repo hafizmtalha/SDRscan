@@ -29,7 +29,7 @@ require_both_sexes
 GT_ARGS=(--vcf-samples "$IN/vcf_samples.txt" --males "$IN/males.txt" --females "$IN/females.txt"
          --sample-ploidy "$PLOIDY_TABLE")
 STRONG_ALT="${STRONG_ALT:-0.75}"                  # "strong" site: ALT in >= 75% of the focal sex
-STRONG_MAX_OPPOSITE="${STRONG_MAX_OPPOSITE:-1}"   # ... and in <= 1 of the other sex
+STRONG_MAX_OPPOSITE="${STRONG_MAX_OPPOSITE:-0.2}" # ... and in <= 20% (rounded down) of the other sex
 
 # a. Do strict sites fall inside the relaxed candidate intervals?
 if [ -d "$STRICT" ]; then

@@ -16,9 +16,19 @@ OUT="${OUTDIR}/13_sexing"
 mkdir -p "$OUT"
 ARGS=(--sample-sheet "$SAMPLES" --outprefix "$OUT/sex_assignment")
 [ -n "${SEX_SYSTEM:-}" ] && ARGS+=(--system "$SEX_SYSTEM")
+[ -s "$PLOIDY_TABLE" ] && ARGS+=(--sample-ploidy "$PLOIDY_TABLE")
 
-# depth
+# depth: SEXING_REGIONS, else the depth candidates of stage 12 (where depth
+# actually differs between sexes), else CANDIDATES
 REGIONS="${SEXING_REGIONS:-}"
+DCAND="${OUTDIR}/12_depth_het/depth_het.candidates.tsv"
+if [ -z "$REGIONS" ] && [ -s "$DCAND" ] && awk -F'\t' 'NR>1 && $1=="depth"{f=1} END{exit !f}' "$DCAND"; then
+  REGIONS="$OUT/regions_from_depth_scan.bed"
+  # strong (multi-window) depth candidates if there are any, else all of them
+  awk -F'\t' -v OFS='\t' 'NR>1 && $1=="depth" && $8=="strong" {print $2,$3,$4}' "$DCAND" > "$REGIONS"
+  [ -s "$REGIONS" ] || awk -F'\t' -v OFS='\t' 'NR>1 && $1=="depth" {print $2,$3,$4}' "$DCAND" > "$REGIONS"
+  log "depth evidence over $(wc -l < "$REGIONS") stage-12 depth candidate interval(s)"
+fi
 if [ -z "$REGIONS" ] && [ ${#CANDIDATES[@]} -gt 0 ]; then
   REGIONS="$OUT/regions_from_candidates.bed"
   for r in "${CANDIDATES[@]}"; do
@@ -36,7 +46,7 @@ fi
 MARKERS="${SEXING_MARKERS:-${OUTDIR}/05_snp_windows/${STRICT_RUN}/sex_specific_sites.tsv}"
 if [ -s "$MARKERS" ] && [ -s "${OUTDIR}/03_merged/merged.genotypes.tsv" ]; then
   ARGS+=(--markers "$MARKERS" --genotypes "${OUTDIR}/03_merged/merged.genotypes.tsv"
-         --vcf-samples "${OUTDIR}/03_merged/vcf_samples.txt" --sample-ploidy "$PLOIDY_TABLE")
+         --vcf-samples "${OUTDIR}/03_merged/vcf_samples.txt")
 else
   log "SNP marker evidence skipped (needs SEXING_MARKERS or stage 5, and stage 3)"
 fi
@@ -48,21 +58,23 @@ MSK="${SEXING_MSK_DB:-${OUTDIR}/08_kmer/sets/MSK/MSK}"
 FSK="${SEXING_FSK_DB:-${OUTDIR}/08_kmer/sets/FSK/FSK}"
 kmer_total() { kmc_tools info "$1" 2>/dev/null | awk -F: '/total k-mers/{gsub(/ /,"",$2); print $2}'; }
 if command -v kmc_tools > /dev/null && { [ -f "${MSK}.kmc_pre" ] || [ -f "${FSK}.kmc_pre" ]; }; then
-  echo -e "sample\tmsk_fraction\tfsk_fraction" > "$OUT/kmer_fractions.tsv"
+  echo -e "sample\tmsk_fraction\tfsk_fraction\tmsk_found\tmsk_total\tfsk_found\tfsk_total" > "$OUT/kmer_fractions.tsv"
   nm=$( [ -f "${MSK}.kmc_pre" ] && kmer_total "$MSK" || echo 0 )
   nf=$( [ -f "${FSK}.kmc_pre" ] && kmer_total "$FSK" || echo 0 )
   for S in $(samples_of); do
     [ -f "$KDIR/${S}.${SFX}.kmc_pre" ] || { log "no k-mer database for $S (run stage 8)"; continue; }
-    fm=NA; ff=NA
+    fm=NA; ff=NA; am=0; af=0
     if [ "${nm:-0}" -gt 0 ]; then
       kmc_tools -t"$THREADS" simple "$MSK" "$KDIR/${S}.${SFX}" intersect "$OUT/_tmp_m" > /dev/null
-      fm=$(awk -v a="$(kmer_total "$OUT/_tmp_m")" -v b="$nm" 'BEGIN{printf "%.4f", a/b}')
+      am=$(kmer_total "$OUT/_tmp_m"); am=${am:-0}
+      fm=$(awk -v a="$am" -v b="$nm" 'BEGIN{printf "%.4f", a/b}')
     fi
     if [ "${nf:-0}" -gt 0 ]; then
       kmc_tools -t"$THREADS" simple "$FSK" "$KDIR/${S}.${SFX}" intersect "$OUT/_tmp_f" > /dev/null
-      ff=$(awk -v a="$(kmer_total "$OUT/_tmp_f")" -v b="$nf" 'BEGIN{printf "%.4f", a/b}')
+      af=$(kmer_total "$OUT/_tmp_f"); af=${af:-0}
+      ff=$(awk -v a="$af" -v b="$nf" 'BEGIN{printf "%.4f", a/b}')
     fi
-    echo -e "${S}\t${fm}\t${ff}" >> "$OUT/kmer_fractions.tsv"
+    echo -e "${S}\t${fm}\t${ff}\t${am}\t${nm:-0}\t${af}\t${nf:-0}" >> "$OUT/kmer_fractions.tsv"
   done
   rm -f "$OUT"/_tmp_*
   ARGS+=(--kmer-fractions "$OUT/kmer_fractions.tsv")

@@ -1,0 +1,32 @@
+cff-version: 1.2.0
+message: "If you use SDRscan, please cite it as below, together with the tools it runs (findZX, BWA, freebayes, bcftools, bedtools, KMC, MUMmer)."
+title: "SDRscan: identify sex chromosomes and the sex-determining region from whole-genome sequencing of males and females"
+abstract: >-
+  SDRscan is a pipeline to identify sex chromosomes and locate the
+  sex-determining region (SDR) from whole-genome resequencing of males and
+  females, for any ploidy. It combines read depth and heterozygosity (findZX
+  and a ploidy-aware scan), sex-specific SNP density, sex-specific k-mers and
+  assembly comparison, tests each candidate region (permutation tests, PCA,
+  leave-one-out), distinguishes XY from ZW systems, and assigns genetic sex to
+  samples of unknown sex.
+authors:
+  - family-names: Malik
+    given-names: Hafiz Muhammad Talha
+type: software
+repository-code: "https://github.com/<user>/SDRscan"
+keywords:
+  - sex chromosomes
+  - sex chromosome identification
+  - sex-determining region
+  - SDR
+  - XY
+  - ZW
+  - sex-linked markers
+  - genetic sexing
+  - molecular sexing
+  - whole-genome sequencing
+  - polyploid
+  - dioecious plants
+  - k-mer
+  - findZX
+  - bioinformatics pipeline

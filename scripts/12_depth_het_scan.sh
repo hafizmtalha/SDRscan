@@ -34,6 +34,14 @@ if [ ! -s "$OUT/bedcov.tsv" ] || [ "$OUT/bam_samples.txt" -nt "$OUT/bedcov.tsv" 
   samtools bedcov -Q "$MIN_MAPQ" "$OUT/windows.bed" "${BAMS[@]}" > "$OUT/bedcov.tsv"
 fi
 
+# Expected depth ratio for a region missing one of P copies is (P-1)/P; "auto"
+# uses half of that log2 drop as the threshold.
+THR="${DEPTH_LOG2_THRESHOLD:-auto}"
+if [ "$THR" = "auto" ]; then
+  THR=$(awk -v p="$(max_ploidy)" 'BEGIN{printf "%.3f", -0.5*log((p-1)/p)/log(2)}')
+  log "Depth threshold (auto, ploidy $(max_ploidy)): |log2(M/F)| >= $THR"
+fi
+
 HET_ARGS=()
 if [ -s "${OUTDIR}/03_merged/merged.genotypes.tsv" ] && [ -s "$PLOIDY_TABLE" ]; then
   HET_ARGS=(--genotypes "${OUTDIR}/03_merged/merged.genotypes.tsv"
@@ -44,7 +52,7 @@ fi
 
 python "$BIN/depth_het_scan.py" --bedcov "$OUT/bedcov.tsv" --bam-samples "$OUT/bam_samples.txt" \
   --sample-sheet "$SAMPLES" "${HET_ARGS[@]}" \
-  --log2-threshold "$DEPTH_LOG2_THRESHOLD" --het-threshold "$HET_DIFF_THRESHOLD" \
+  --log2-threshold "$THR" --het-threshold "$HET_DIFF_THRESHOLD" \
   --outprefix "$OUT/depth_het" | tee "$OUT/depth_het.log"
 
 log "Done. Outputs in $OUT"

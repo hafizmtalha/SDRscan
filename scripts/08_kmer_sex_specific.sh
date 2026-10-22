@@ -15,8 +15,9 @@
 #
 # Usage:
 #   scripts/08_kmer_sex_specific.sh MSK|FSK MIN_PRESENT TAG=ref.fa [TAG=ref.fa ...]
-# MIN_PRESENT: a count (7), a fraction of the focal sex (0.85), "all", or
-# "all-1" (tolerates one low-coverage or mis-sexed sample; the default).
+# MIN_PRESENT: a count (7), a fraction of the focal sex (0.85), "all",
+# "all-1" (tolerates one low-coverage or mis-sexed sample), or "auto"
+# (all-1 with >= 4 focal samples, otherwise all; the default).
 # e.g.
 #   scripts/08_kmer_sex_specific.sh MSK 7 REF1=/refs/hapA.fa REF2=/refs/hapB.fa
 source "$(dirname "$0")/common.sh"
@@ -42,7 +43,7 @@ for S in $(samples_of); do
   if [ -f "$KDIR/${S}.${SFX}.kmc_pre" ]; then continue; fi
   log "KMC: $S"
   printf '%s\n%s\n' "$(sample_field "$S" fq1)" "$(sample_field "$S" fq2)" > "$TMP/${S}.files"
-  kmc -k"$K" -ci"$KMER_MIN_COUNT" -t"$THREADS" @"$TMP/${S}.files" "$KDIR/${S}.${SFX}" "$TMP" > "$TMP/${S}.kmc.log"
+  kmc -k"$K" -ci"$KMER_MIN_COUNT" -t"$THREADS" -m"${KMER_MEM_GB:-8}" @"$TMP/${S}.files" "$KDIR/${S}.${SFX}" "$TMP" > "$TMP/${S}.kmc.log"
 done
 
 # Union a list of databases, summing counters; result written to $1

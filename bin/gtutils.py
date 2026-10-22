@@ -69,12 +69,19 @@ class GenotypeParser:
                   f"treated as missing (e.g. {ex}). Check PLOIDY / the ploidy column.", file=stream)
 
 
-def threshold(value, n):
-    """A threshold given as a count (7) or a fraction of n samples (0.8 -> ceil(0.8*n))."""
+def threshold(value, n, maximum=False):
+    """A threshold given as a count (7) or a fraction of n samples.
+
+    Fractions are rounded so the threshold never becomes more permissive than
+    asked: minimums round up (0.8 of 6 -> 5), maximums round down
+    (0.25 of 2 -> 0).
+    """
     v = float(value)
     if v < 0:
         raise SystemExit(f"ERROR: negative threshold {value}")
     if "." in str(value) and v <= 1:
+        if maximum:
+            return int(math.floor(v * n + 1e-9))
         return int(math.ceil(v * n - 1e-9))
     return int(v)
 

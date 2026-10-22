@@ -132,11 +132,13 @@ sample_size_report() {
 }
 
 # Resolve a "how many samples" setting: a count (7), a fraction (0.8),
-# "all" or "all-N", against n samples. Result is clamped to 1..n.
+# "all", "all-N", or "auto" (all-1 with >= 4 samples, otherwise all),
+# against n samples. Result is clamped to 1..n.
 resolve_count() {
   local spec="$1" n="$2" v
   case "$spec" in
     all)     v=$n ;;
+    auto)    if [ "$n" -ge 4 ]; then v=$((n - 1)); else v=$n; fi ;;
     all-*)   v=$((n - ${spec#all-})) ;;
     *.*)     v=$(awk -v f="$spec" -v n="$n" 'BEGIN{v=f*n; c=int(v); if (c<v) c++; print c}') ;;
     *)       v=$spec ;;

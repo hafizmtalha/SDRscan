@@ -9,7 +9,8 @@
 #   scripts/05_sex_specific_snp_windows.sh RUN_NAME [classifier options]
 #
 # Classifier options are passed to bin/classify_sex_specific_snps.py.
-# Thresholds are counts or fractions of each sex (0.8 = 80%, rounded up):
+# Thresholds are counts or fractions of each sex (0.8 = 80%; minimums round
+# up, maximums down):
 #   scripts/05_sex_specific_snp_windows.sh strict \
 #     --min-called-males 0.8 --min-called-females 0.8 \
 #     --min-alt-males 0.8 --min-alt-females 0.8 --max-alt-opposite 0

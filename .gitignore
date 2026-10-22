@@ -24,3 +24,6 @@ __pycache__/
 *.pyc
 .Rhistory
 .RData
+
+# test runs
+tests/output/

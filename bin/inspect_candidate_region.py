@@ -98,7 +98,7 @@ def main():
     top.to_csv(f"{args.prefix}.top_sites.tsv", sep="\t", index=False)
 
     sm, sf = threshold(args.strong_alt, nm), threshold(args.strong_alt, nf)
-    om, of = threshold(args.strong_max_opposite, nm), threshold(args.strong_max_opposite, nf)
+    om, of = threshold(args.strong_max_opposite, nm, maximum=True), threshold(args.strong_max_opposite, nf, maximum=True)
     strong_m = ((df["male_alt"] >= sm) & (df["female_alt"] <= of)).sum()
     strong_f = ((df["female_alt"] >= sf) & (df["male_alt"] <= om)).sum()
 

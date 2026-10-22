@@ -74,7 +74,7 @@ def main():
         raise SystemExit(f"ERROR: permutation test needs >= 2 samples of each sex (have {nf} focal, {no} other)")
     min_called_f, min_called_o = threshold(args.min_called, nf), threshold(args.min_called, no)
     min_alt = threshold(args.min_alt, nf)
-    max_opp = threshold(args.max_opposite, no)
+    max_opp = threshold(args.max_opposite, no, maximum=True)
 
     def count_strong(f_idx, o_idx):
         fo, ot = A[:, f_idx], A[:, o_idx]

@@ -72,7 +72,11 @@ freebayes -f REF -p PLOIDY -C 4 --min-mapping-quality 20 --min-base-quality 20 \
 **What happened**
 1. A single joint run (`freebayes-parallel` over all BAMs, 60 threads) took
    down the shared server. We switched to **one sample per job, 2–3 jobs at a
-   time** (`MAX_PARALLEL_SAMPLES`), which is what the script does.
+   time**. That kept the server alive but caused a missing-genotype problem
+   (see "Correction: joint calling" below). The script now calls all samples
+   **jointly, in genome chunks, a few jobs at a time** (`MAX_PARALLEL_JOBS`,
+   `CALL_CHUNK_BP`). The server load stays bounded and every sample gets a
+   genotype at every site.
 2. The first calls were diploid (`-p 2`). The population could be
    tetraploid, so **every sample was re-called with `-p 4`**, and the
    tetraploid calls were used from then on.
@@ -83,10 +87,10 @@ freebayes -f REF -p PLOIDY -C 4 --min-mapping-quality 20 --min-base-quality 20 \
    genotype with the wrong number of alleles is reported instead of being
    silently miscounted.
 4. One sample repeatedly produced an empty VCF. The cause was its BAM;
-   re-aligning fixed it. The script now stops on a 0-byte VCF instead of
-   letting it through silently.
+   re-aligning fixed it. Stage 2 now stops if any genome chunk fails to
+   finish, instead of letting a partial VCF through.
 
-**Led to:** per-sample tetraploid VCFs → merging (Step 4). findZX (Step 3)
+**Led to:** tetraploid VCFs → merging and filtering (Step 4). findZX (Step 3)
 ran in parallel because it works from the raw reads.
 
 ---
@@ -141,6 +145,8 @@ resolution we built the sex-specific SNP analysis (Steps 4–5).
 
 **Script:** `scripts/03_merge_vcfs.sh` (stage 3)
 
+In the original analysis:
+
 1. `bcftools norm -m -both` per sample and rename the sample to its ID
    (`bcftools reheader`)
 2. `bcftools merge` all samples
@@ -151,6 +157,9 @@ resolution we built the sex-specific SNP analysis (Steps 4–5).
    bcftools query -f '%CHROM\t%POS[\t%GT]\n' merged.filtered.snps.vcf.gz > merged.genotypes.tsv
    bcftools query -l merged.filtered.snps.vcf.gz > vcf_samples.txt
    ```
+
+Stage 3 now starts from the joint VCF, so steps 1–2 become a single
+`bcftools norm` (see "Correction: joint calling").
 
 The genotype table, `vcf_samples.txt` (column order) and `males.txt` /
 `females.txt` are the inputs to everything SNP-based.
@@ -371,6 +380,34 @@ python bin/plot_manhattan_windows.py \
   false heterozygous calls.
 - **Size jobs for the server.** Several crashes and restarts came from
   launching too many threads or too many findZX runs at once.
+
+---
+
+## Correction: joint calling instead of per-sample calling and merging
+
+Testing SDRscan on simulated data with a planted Y-specific region showed a
+flaw in calling samples one at a time and merging (Steps 2 and 4). A
+single-sample VCF only contains sites where that sample carries a variant.
+After `bcftools merge`, a sample that matches the reference at a site is
+written as missing (`./.`), not as 0/0. At a true Y-specific SNP, every
+female then looks missing rather than homozygous reference, so the site fails
+the "called in at least N females" filter of Step 5. The classifier rejects
+exactly the sites it is looking for.
+
+In the simulation, per-sample calling plus merging gave **0 male-specific
+SNPs** in a 400 kb region holding more than 2,000 planted Y-specific SNPs.
+The original analysis used the same per-sample
+design, which plausibly explains why its first strict runs found only a
+handful of sex-specific sites genome-wide.
+
+Stage 2 now calls all samples jointly, so a sample without the ALT allele
+gets an explicit 0/0 genotype. The genome is split into chunks
+(`CALL_CHUNK_BP`) and only `MAX_PARALLEL_JOBS` single-threaded freebayes
+jobs run at once, which avoids the server overload that motivated
+per-sample calling in the first place. Mixed-ploidy populations use
+freebayes's `--cnv-map`. An alternative for very large sample sets is
+per-sample gVCF-style calling followed by joint genotyping (e.g. GATK
+HaplotypeCaller + GenotypeGVCFs), which also records reference calls.
 
 ---
 
